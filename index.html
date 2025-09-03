@@ -50,7 +50,6 @@
   .quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
   @media (max-width:860px){.quick-grid{grid-template-columns:repeat(2,1fr)}}
 
-  /* Calendar fixed cells */
   .mode-switch{display:flex;gap:8px;margin:6px 0}
   .pill{border:1px solid var(--line);background:var(--cardSoft);padding:8px 12px;border-radius:999px;cursor:pointer}
   .pill.active{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -249,12 +248,12 @@
     settings:{ baseMonthly:0, workdays:22, hoursPerDay:8, weekdayFirstMult:1.5, weekdayNextMult:2.0, satMult:1.5, sunMult:2.0, holidayMult:2.0 },
     month: (new Date().toISOString().slice(0,7)),
     holidaysByMonth:{},
+    workdaysByMonth:{},   // помесячная норма дней
     shifts: []
   };
 
   const $ = s=>document.querySelector(s);
   const $$ = s=>document.querySelectorAll(s);
-  const money = n => (Math.round(n)).toLocaleString('ru-RU');
   const isoMonth = d => (d||'').slice(0,7);
   const dayName = d => new Date(d+'T00:00:00').toLocaleDateString('ru-RU',{weekday:'short'});
   const uid = () => Math.random().toString(36).slice(2,10);
@@ -274,6 +273,32 @@
     archiveList: $('#archiveList'),
     tip: document.getElementById('salaryTip'), tip2: document.getElementById('salaryTip2')
   };
+
+  // === NEW: helpers for per-month workdays ===
+  function getWorkdays(month){
+    const wd = state.workdaysByMonth?.[month];
+    return (wd && wd > 0) ? wd : state.settings.workdays;
+  }
+  function monthHuman(month){
+    const [y,m] = month.split('-').map(Number);
+    return new Date(y, m-1, 1).toLocaleDateString('ru-RU',{month:'long', year:'numeric'});
+  }
+  function syncWorkdaysField(){
+    if (ui.workdays) ui.workdays.value = getWorkdays(state.month);
+  }
+  function ensureWorkdaysFor(month){
+    const cur = state.workdaysByMonth?.[month];
+    if (!cur || cur <= 0) {
+      const prev = state.workdaysByMonth?.[addMonthLocal(month,-1)] || state.settings.workdays || 22;
+      const val = parseInt(prompt(`Сколько рабочих дней в ${monthHuman(month)}?`, prev), 10);
+      if (val && val > 0 && val < 32) {
+        (state.workdaysByMonth||(state.workdaysByMonth={}))[month] = val;
+        save(); syncWorkdaysField();
+      }
+    } else {
+      syncWorkdaysField();
+    }
+  }
 
   // Tabs
   ui.tabs.forEach(btn=>{
@@ -305,9 +330,10 @@
   document.documentElement.setAttribute('data-theme', state.theme);
   ui.themeSelect.value = state.theme;
   Object.entries(state.settings).forEach(([k,v])=>{ if(ui[k]) ui[k].value = v; });
+  syncWorkdaysField();
+  ensureWorkdaysFor(state.month);
 
   // Helpers
-  function hourlyRate(){ const s=state.settings; return s.baseMonthly / (Math.max(1,s.workdays)*Math.max(1,s.hoursPerDay)); }
   const isHoliday = d => new Set(state.holidaysByMonth[isoMonth(d)]||[]).has(d);
   function autoTypeForDate(d){ if(isHoliday(d))return 'holiday'; const day=new Date(d+'T00:00:00').getDay(); if(day===0)return'sunday'; if(day===6)return'saturday'; return'weekday'; }
   function payForShift(s, hr){
@@ -318,6 +344,12 @@
     if(s.type==='sunday') return h*st.sunMult*hr;
     return 0;
   }
+  function hourly(month){
+    const s=state.settings;
+    if((s.baseMonthly||0)<=0) return 0;
+    const wd = getWorkdays(month);
+    return s.baseMonthly / (Math.max(1, wd) * Math.max(1, s.hoursPerDay));
+  }
 
   // Buttons
   document.body.addEventListener('click', (e)=>{
@@ -325,10 +357,20 @@
     if(!t) return;
     if(t.id==='addShift') return onAddShift();
     if(t.dataset.quick) return onQuick(t.dataset.quick);
-    if(t.id==='todayBtn'){ ui.shiftDate.value=todayLocalISO(); syncMonth(ui.shiftDate.value); save(); render(); updateDayInfo(); return; }
+    if(t.id==='todayBtn'){
+      ui.shiftDate.value=todayLocalISO();
+      syncMonth(ui.shiftDate.value);
+      save(); ensureWorkdaysFor(state.month); render(); updateDayInfo(); return;
+    }
   });
-  ui.prevMonth.addEventListener('click', ()=>{ state.month=addMonthLocal(state.month,-1); ui.monthFilter.value=state.month; save(); render(); });
-  ui.nextMonth.addEventListener('click', ()=>{ state.month=addMonthLocal(state.month, 1); ui.monthFilter.value=state.month; save(); render(); });
+  ui.prevMonth.addEventListener('click', ()=>{
+    state.month=addMonthLocal(state.month,-1);
+    ui.monthFilter.value=state.month; save(); ensureWorkdaysFor(state.month); render();
+  });
+  ui.nextMonth.addEventListener('click', ()=>{
+    state.month=addMonthLocal(state.month, 1);
+    ui.monthFilter.value=state.month; save(); ensureWorkdaysFor(state.month); render();
+  });
 
   function onQuick(code){
     const date = ui.shiftDate.value || todayLocalISO();
@@ -343,10 +385,19 @@
   // Inputs change
   ui.shiftType.addEventListener('change', updateDayInfo);
   ui.shiftHours.addEventListener('keydown', (e)=>{ if(e.key==='Enter') onAddShift(); });
-  ['baseMonthly','workdays','hoursPerDay','weekdayFirstMult','weekdayNextMult','satMult','sunMult','holidayMult'].forEach(id=>{
+  ['baseMonthly','hoursPerDay','weekdayFirstMult','weekdayNextMult','satMult','sunMult','holidayMult'].forEach(id=>{
     ui[id].addEventListener('change', e=>{ state.settings[id]=parseFloat(e.target.value||0); save(); render(); maybeShowTips(); });
   });
-  ui.monthFilter.addEventListener('change', e=>{ state.month=e.target.value; save(); render(); });
+  // workdays now per-month
+  ui.workdays.addEventListener('change', e=>{
+    const v = parseInt(e.target.value,10)||0;
+    (state.workdaysByMonth||(state.workdaysByMonth={}))[state.month] = v;
+    save(); render();
+  });
+
+  ui.monthFilter.addEventListener('change', e=>{
+    state.month=e.target.value; save(); ensureWorkdaysFor(state.month); render();
+  });
   ui.themeSelect.addEventListener('change', e=>{ state.theme=e.target.value; document.documentElement.setAttribute('data-theme', state.theme); save(); });
 
   // Import/Export/Clear
@@ -358,9 +409,17 @@
     const text = await file.text();
     try{
       const obj=JSON.parse(text);
-      Object.assign(state, { theme: obj.theme||'dark', settings: obj.settings||state.settings, month: obj.month||state.month, holidaysByMonth: obj.holidaysByMonth||{}, shifts: obj.shifts||[] });
+      Object.assign(state, {
+        theme: obj.theme||'dark',
+        settings: obj.settings||state.settings,
+        month: obj.month||state.month,
+        holidaysByMonth: obj.holidaysByMonth||{},
+        workdaysByMonth: obj.workdaysByMonth||{},
+        shifts: obj.shifts||[]
+      });
       ui.themeSelect.value = state.theme; document.documentElement.setAttribute('data-theme', state.theme);
       ui.monthFilter.value = state.month; Object.entries(state.settings).forEach(([k,v])=>{ if(ui[k]) ui[k].value=v; });
+      syncWorkdaysField(); ensureWorkdaysFor(state.month);
       save(); render(); maybeShowTips();
     }catch(err){ alert('Ошибка импорта: '+err.message); }
     ui.importFile.value='';
@@ -379,7 +438,10 @@
     document.getElementById('dayInfo').textContent = `${d} — ${dayName(d)} — по умолчанию: ${label}`;
   }
 
-  function syncMonth(dateISO){ const m = isoMonth(dateISO); if(m!==state.month){ state.month=m; ui.monthFilter.value=m; }}
+  function syncMonth(dateISO){
+    const m = isoMonth(dateISO);
+    if(m!==state.month){ state.month=m; ui.monthFilter.value=m; ensureWorkdaysFor(state.month); }
+  }
 
   function render(){
     buildCalendar(state.month);
@@ -393,22 +455,15 @@
     const show = (state.settings.baseMonthly||0) <= 0;
     if(ui.tip){ ui.tip.style.display = show ? 'block':'none'; }
     if(ui.tip2){ ui.tip2.style.display = show ? 'block':'none'; }
-    // Outputs if salary 0
     if(show){
       ui.baseMonthlyOut.textContent = 'не задан';
       ui.hourlyOut.textContent = '—';
-      ui.grandTotal.textContent = (ui.overtimeOut.textContent.replace(/[^0-9]/g,'') || '0') + ' ₽';
     }
   }
 
-  function hourly(){ 
-    const s=state.settings;
-    if((s.baseMonthly||0)<=0) return 0;
-    return s.baseMonthly / (Math.max(1,s.workdays)*Math.max(1,s.hoursPerDay));
-  }
-
   function renderTotals(month){
-    const hr=hourly(); const rows=state.shifts.filter(s=>isoMonth(s.date)===month);
+    const hr=hourly(month);
+    const rows=state.shifts.filter(s=>isoMonth(s.date)===month);
     const sum=rows.reduce((a,s)=>a+payForShift(s,hr),0);
     const hours=rows.reduce((a,s)=>a+s.hours,0);
     const base = state.settings.baseMonthly||0;
@@ -420,7 +475,8 @@
   }
 
   function buildList(month){
-    const hr=hourly(); const rows=state.shifts.filter(s=>isoMonth(s.date)===month).sort((a,b)=>a.date.localeCompare(b.date));
+    const hr=hourly(month);
+    const rows=state.shifts.filter(s=>isoMonth(s.date)===month).sort((a,b)=>a.date.localeCompare(b.date));
     const tbody=ui.rows; if(!tbody) return; tbody.innerHTML=''; let total=0;
     rows.forEach(s=>{
       const pay=payForShift(s,hr); total+=pay;
@@ -453,15 +509,17 @@
     ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(h=>{
       const cell=document.createElement('div'); cell.className='day-head'; cell.textContent=h; grid.appendChild(cell);
     });
-    for(let i=0;i<start;i++){ const e=document.createElement('div'); grid.appendChild(e); }
-    const hr = hourly();
+    for(let i=0;i<start;i++){ grid.appendChild(document.createElement('div')); }
     const today = todayLocalISO();
     for(let d=1; d<=days; d++){
       const iso=mkLocalISO(y,m,d);
       const dayShifts=state.shifts.filter(s=>s.date===iso);
       const cell=document.createElement('div'); cell.className='day'+(dayShifts.length?' has':'')+(iso===today?' today':'');
       cell.innerHTML = `<div class="num">${d}</div>` + (dayShifts.length?`<div class="badge">🔨</div>`:'')
-      cell.addEventListener('click', ()=> showDayDetail(iso, dayShifts, hr));
+      cell.addEventListener('click', ()=> {
+        const hrForDay = hourly(isoMonth(iso));
+        showDayDetail(iso, dayShifts, hrForDay);
+      });
       grid.appendChild(cell);
     }
   }
@@ -498,11 +556,11 @@
 
   function renderArchive(){
     const list = document.getElementById('archiveList'); if(!list) return; list.innerHTML='';
-    const hr = hourly();
     const byMonth = {};
     state.shifts.forEach(s=>{ const m=isoMonth(s.date); (byMonth[m]||(byMonth[m]=[])).push(s); });
     const months = Object.keys(byMonth).sort().reverse();
     months.forEach(m=>{
+      const hr = hourly(m);
       const rows = byMonth[m].sort((a,b)=>a.date.localeCompare(b.date));
       let total=0, hoursTotal=0; rows.forEach(s=>{ total+=payForShift(s,hr); hoursTotal+=s.hours; });
       const card=document.createElement('div'); card.className='card';
