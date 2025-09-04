@@ -17,7 +17,7 @@
     --accent:#2563eb;--danger:#b91c1c;--btn:#ffffff;--btnText:#111827;
   }
   html,body{height:100%}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif}
   header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px;background:#0b0d12;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;color:#fff}
   header h1{font-size:18px;margin:0;color:#fff}
   .tabs{display:flex;gap:8px;overflow:auto;padding-bottom:4px}
@@ -56,7 +56,6 @@
   .quick-btn:active{transform:scale(.98)}
   #banner{position:fixed;left:8px;right:8px;bottom:8px;background:#1f2937;color:#fff;border:1px solid #374151;border-radius:10px;padding:10px 12px;z-index:9999;display:none;white-space:pre-wrap}
   .version-note{margin-top:16px;color:var(--muted);font-size:12px;text-align:right}
-  .checkline{display:flex;align-items:center;gap:8px}
   .tag{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px;background:var(--cardSoft)}
 </style>
 </head>
@@ -94,8 +93,9 @@
         <input type="number" id="shiftHours" min="0.25" step="0.25" placeholder="напр., 3.5">
       </div>
       <div class="col-3">
-        <label>Категория (авто для подработки)</label>
-        <select id="shiftType" disabled><option>(авто)</option></select>
+        <!-- Категория убрана по запросу -->
+        <label style="visibility:hidden">Категория (авто)</label>
+        <div style="height:44px"></div>
       </div>
     </div>
 
@@ -109,7 +109,7 @@
       <div class="quick-grid">
         <button class="quick-btn" data-quick="hrs-3.5" type="button">3.5 ч</button>
         <button class="quick-btn" data-quick="hrs-8"   type="button">8 ч</button>
-        <button class="quick-btn" data-quick="off"     type="button">Не работал</button>
+        <button class="quick-btn" data-quick="off"     type="button">Отгул</button>
         <button class="quick-btn" data-quick="vac"     type="button">Отпуск</button>
       </div>
     </div>
@@ -180,8 +180,8 @@
       <div class="col-3"><label>Праздник</label><input type="number" id="holidayMult" step="0.1" min="1" value="2"></div>
       <div class="col-5">
         <label>Оплата отпуска</label>
-        <div class="checkline"><label><input type="radio" name="vacPayMode" value="calendar"> Календарный отпуск (все дни оплачиваются)</label></div>
-        <div class="checkline"><label><input type="radio" name="vacPayMode" value="workdays"> Производственный отпуск (оплачиваются только будни)</label></div>
+        <div><label><input type="radio" name="vacPayMode" value="calendar"> Календарный отпуск (все дни)</label></div>
+        <div><label><input type="radio" name="vacPayMode" value="workdays"> Производственный отпуск (только будни)</label></div>
       </div>
       <div class="col-4">
         <label>Тема</label>
@@ -198,7 +198,7 @@
         </div>
       </div>
     </div>
-    <div class="version-note">Версия приложения: <span id="appVersion">v6.5</span></div>
+    <div class="version-note">Версия приложения: <span id="appVersion">v6.6</span></div>
   </section>
 
   <!-- ПРАЗДНИКИ -->
@@ -224,7 +224,7 @@
 <script>
 (function(){
   const SKEY='paycalc_v64';
-  const APP_VERSION='v6.5';
+  const APP_VERSION='v6.6';
   const $ = s=>document.querySelector(s);
   const $$ = s=>document.querySelectorAll(s);
   const pad = n => String(n).padStart(2,'0');
@@ -236,7 +236,7 @@
   const banner = (msg)=>{ const b=$('#banner'); b.textContent=msg; b.style.display='block'; clearTimeout(b._t); b._t=setTimeout(()=>b.style.display='none',4000); };
 
   function safeLoad(){ try{ return JSON.parse(localStorage.getItem(SKEY)) || null; }catch(e){ banner('Хранилище недоступно'); return null; } }
-  function safeSave(){ try{ localStorage.setItem(SKEY, JSON.stringify(state)); } catch(e){ console.warn('localStorage недоступен:', e); banner('Данные не сохраняются (приватный режим/квота)'); } }
+  function safeSave(){ try{ localStorage.setItem(SKEY, JSON.stringify(state)); } catch(e){ console.warn('localStorage недоступен:', e); banner('Данные не сохраняются'); } }
 
   const persisted = safeLoad();
   const state = persisted || {
@@ -251,6 +251,7 @@
   };
 
   function isWeekdayISO(iso){ const dow=new Date(iso+'T00:00:00').getDay(); return dow>=1 && dow<=5; }
+  function isHoliday(dateISO){ const set=new Set(state.holidaysByMonth[isoMonth(dateISO)]||[]); return set.has(dateISO); }
   function isWorkingWeekdayISO(iso){ return isWeekdayISO(iso) && !isHoliday(iso); }
 
   function computeWorkdays(ym){
@@ -279,11 +280,7 @@
   function countVacationPaidDays(ym){
     const st=getStatuses(ym);
     const vac=(st.vac||[]).slice();
-    if(state.settings.vacPayMode==='workdays'){
-      return vac.filter(isWeekdayISO).length;
-    } else {
-      return vac.length;
-    }
+    if(state.settings.vacPayMode==='workdays'){ return vac.filter(isWeekdayISO).length; } else { return vac.length; }
   }
 
   function monthLeaves(ym){ return state.leaves.filter(l => isoMonth(l.date)===ym); }
@@ -341,11 +338,10 @@
     if(dow===6) return 'saturday';
     return 'weekday';
   }
-  function isHoliday(dateISO){ const set=new Set(state.holidaysByMonth[isoMonth(dateISO)]||[]); return set.has(dateISO); }
 
   const ui = {
     tabs: $$('.tab'), panes: $$('section.card'),
-    shiftDate: $('#shiftDate'), todayBtn: $('#todayBtn'), shiftType: $('#shiftType'), shiftHours: $('#shiftHours'), addShift: $('#addShift'), dayInfo: $('#dayInfo'),
+    shiftDate: $('#shiftDate'), todayBtn: $('#todayBtn'), shiftHours: $('#shiftHours'), addShift: $('#addShift'), dayInfo: $('#dayInfo'),
     modeSelect: $('#modeSelect'),
     monthTitle: $('#monthTitle'), prevMonth: $('#prevMonth'), nextMonth: $('#nextMonth'), cal: $('#calendarGrid'),
     dayDetailWrap: $('#dayDetailWrap'), dayRows: $('#dayRows'),
@@ -379,7 +375,6 @@
 
   function applyModeUI(){
     const mode = ui.modeSelect.value;
-    ui.shiftType.disabled = (mode!=='overtime');
     ui.quickCard.style.display = (mode==='overtime') ? 'block' : 'none';
   }
   ui.modeSelect.addEventListener('change', applyModeUI);
@@ -512,7 +507,7 @@
     const st=getStatuses(ym);
     const offSet=new Set(st.off||[]), vacSet=new Set(st.vac||[]);
     const leavesByDate = new Map();
-    monthLeaves(ym).forEach(l=>{ leavesByDate.set(l.date, (leavesByDate.get(l.date)||0)+l.hours ); });
+    state.leaves.filter(l=>isoMonth(l.date)===ym).forEach(l=>{ leavesByDate.set(l.date, (leavesByDate.get(l.date)||0)+l.hours ); });
     for(let d=1; d<=days; d++){
       const iso=mkISO(y,m,d);
       const item=document.createElement('div');
@@ -521,7 +516,7 @@
       item.className='day'+(has?' has':'')+(iso===today?' today':'')+(state.uiSelectedDay===iso?' selected':'');
       let badge='';
       if(vacSet.has(iso)) badge='🏖️';
-      else if(offSet.has(iso)) badge='🚫';
+      else if(offSet.has(iso)) badge='⏳';
       else if(leavesByDate.has(iso)) badge='⏳';
       else if(dayShifts.length) badge='🔨';
       item.innerHTML=`<div class="num">${d}</div>${has?`<div class="badge">${badge}</div>`:''}`;
