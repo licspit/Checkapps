@@ -28,7 +28,7 @@
   label{display:block;color:var(--muted);font-size:12px;margin:6px 0}
   input,select,button{font:inherit}
   input,select{width:100%;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--btn);color:var(--btnText);min-height:44px}
-  .row{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
+  .row{display:grid;grid-template-columns:repeat(12,1fr);gap:8px}
   .col-3{grid-column:span 3}.col-4{grid-column:span 4}.col-5{grid-column:span 5}.col-6{grid-column:span 6}.col-12{grid-column:span 12}
   @media (max-width:860px){.col-3,.col-4,.col-5,.col-6{grid-column:span 12}}
   .btn{padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:var(--btn);color:var(--btnText);cursor:pointer;min-height:44px}
@@ -39,7 +39,10 @@
   .right{text-align:right}
   .muted{color:var(--muted);font-size:12px}
   .total{font-size:22px;font-weight:700}
+  /* календарь */
   .calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
+  #calendarHeads{grid-template-columns:repeat(7,1fr); gap:10px; margin-bottom:4px}
+  #calendarDays {grid-template-columns:repeat(7,1fr); gap:10px}
   .day-head{color:var(--muted);text-align:center;font-size:12px}
   .day{position:relative;height:84px;background:var(--cardSoft);border:1px solid var(--line);border-radius:16px;cursor:pointer;transition:transform .05s ease;background-clip:padding-box}
   .day.has{border-color:var(--accent);background:rgba(59,130,246,.08)}
@@ -51,9 +54,13 @@
   table{width:100%;border-collapse:collapse;min-width:560px}
   th,td{padding:12px;border-bottom:1px solid var(--line);text-align:left}
   thead th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  /* быстрые кнопки */
   .quick-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;align-items:stretch;justify-items:stretch;max-width:520px;margin:0 auto}
   .quick-btn{display:flex;align-items:center;justify-content:center;min-height:56px;border-radius:12px;border:1px solid var(--line);background:var(--btn);color:var(--btnText);font-weight:600;cursor:pointer}
   .quick-btn:active{transform:scale(.98)}
+  /* мелочи */
+  #quickCard{margin-top:6px}
+  #calendarCard{margin-top:12px}
   #banner{position:fixed;left:8px;right:8px;bottom:8px;background:#1f2937;color:#fff;border:1px solid #374151;border-radius:10px;padding:10px 12px;z-index:9999;display:none;white-space:pre-wrap}
   .version-note{margin-top:16px;color:var(--muted);font-size:12px;text-align:right}
   .tag{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px;background:var(--cardSoft)}
@@ -92,11 +99,7 @@
         <label>Часы</label>
         <input type="number" id="shiftHours" min="0.25" step="0.25" placeholder="напр., 3.5">
       </div>
-      <div class="col-3">
-        <!-- Категория убрана по запросу -->
-        <label style="visibility:hidden">Категория (авто)</label>
-        <div style="height:44px"></div>
-      </div>
+      <!-- удалён пустой блок "Категория" -->
     </div>
 
     <div class="toolbar" style="margin-top:10px">
@@ -120,7 +123,11 @@
         <button class="btn small" id="prevMonth" type="button">◀︎ Предыдущий</button>
         <button class="btn small" id="nextMonth" type="button">Следующий ▶︎</button>
       </div>
-      <div class="calendar" id="calendarGrid"></div>
+
+      <!-- НОВО: две отдельные сетки -->
+      <div class="calendar" id="calendarHeads"></div>
+      <div class="calendar" id="calendarDays"></div>
+
       <div class="table-wrap" id="dayDetailWrap" style="display:none">
         <table>
           <thead><tr><th>Тип</th><th class="right">Часы/дни</th><th class="right">Сумма</th><th class="right">Действия</th></tr></thead>
@@ -198,7 +205,7 @@
         </div>
       </div>
     </div>
-    <div class="version-note">Версия приложения: <span id="appVersion">v6.6</span></div>
+    <div class="version-note">Версия приложения: <span id="appVersion">v6.7</span></div>
   </section>
 
   <!-- ПРАЗДНИКИ -->
@@ -224,7 +231,7 @@
 <script>
 (function(){
   const SKEY='paycalc_v64';
-  const APP_VERSION='v6.6';
+  const APP_VERSION='v6.7';
   const $ = s=>document.querySelector(s);
   const $$ = s=>document.querySelectorAll(s);
   const pad = n => String(n).padStart(2,'0');
@@ -245,8 +252,8 @@
     settings:{ baseMonthly:0, hoursPerDay:8, weekdayFirstMult:1.5, weekdayNextMult:2, satMult:1.5, sunMult:2, holidayMult:2, vacPayMode:'calendar' },
     holidaysByMonth:{},
     statusesByMonth:{},
-    shifts:[],          // [{id,date,type,hours}] — подработки
-    leaves:[],          // [{id,date,hours}] — отгулы
+    shifts:[],
+    leaves:[],
     uiSelectedDay:null
   };
 
@@ -343,7 +350,7 @@
     tabs: $$('.tab'), panes: $$('section.card'),
     shiftDate: $('#shiftDate'), todayBtn: $('#todayBtn'), shiftHours: $('#shiftHours'), addShift: $('#addShift'), dayInfo: $('#dayInfo'),
     modeSelect: $('#modeSelect'),
-    monthTitle: $('#monthTitle'), prevMonth: $('#prevMonth'), nextMonth: $('#nextMonth'), cal: $('#calendarGrid'),
+    monthTitle: $('#monthTitle'), prevMonth: $('#prevMonth'), nextMonth: $('#nextMonth'),
     dayDetailWrap: $('#dayDetailWrap'), dayRows: $('#dayRows'),
     baseMonthlyOut: $('#baseMonthlyOut'), baseHourlyOut: $('#baseHourlyOut'), overtimeOut: $('#overtimeOut'), otHoursOut: $('#otHoursOut'), grandTotal: $('#grandTotal'), vacInfo: $('#vacInfo'),
     monthFilter: $('#monthFilter'), baseMonthly: $('#baseMonthly'), autoWorkdays: $('#autoWorkdays'), hoursPerDay: $('#hoursPerDay'),
@@ -496,33 +503,77 @@
     $('#vacInfo').textContent = vacDaysPaid>0 ? `Отпускные: ${vacDaysPaid} ${modeText} дн • ${money(vacPay)} ₽ (среднедневной: ${money(averageDaily(ym))})` : '';
   }
 
+  /* НОВАЯ версия — две сетки: шапка и дни */
   function renderCalendar(){
     const ym=state.month, [y,m]=ym.split('-').map(Number);
-    $('#monthTitle').textContent = new Date(y,m-1,1).toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
-    const first=new Date(y,m-1,1), start=(first.getDay()+6)%7, days=new Date(y,m,0).getDate();
-    const grid=$('#calendarGrid'); grid.innerHTML='';
-    ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(h=>{const d=document.createElement('div');d.className='day-head';d.textContent=h;grid.appendChild(d);});
-    for(let i=0;i<start;i++) grid.appendChild(document.createElement('div'));
+
+    // Заголовок месяца
+    $('#monthTitle').textContent =
+      new Date(y,m-1,1).toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
+
+    // Гриды
+    const heads = $('#calendarHeads');
+    const daysGrid = $('#calendarDays');
+    heads.innerHTML = '';
+    daysGrid.innerHTML = '';
+
+    // Шапка
+    ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(h=>{
+      const d=document.createElement('div');
+      d.className='day-head';
+      d.textContent=h;
+      heads.appendChild(d);
+    });
+
+    // Смещение
+    const first=new Date(y,m-1,1);
+    const start=(first.getDay()+6)%7; // 0..6 (Пн..Вс)
+    const days=new Date(y,m,0).getDate();
+
+    // Пустые ячейки смещения только в блоке с днями
+    for(let i=0;i<start;i++){
+      const spacer=document.createElement('div');
+      spacer.style.visibility='hidden';
+      daysGrid.appendChild(spacer);
+    }
+
     const today=todayISO();
     const st=getStatuses(ym);
-    const offSet=new Set(st.off||[]), vacSet=new Set(st.vac||[]);
+    const offSet=new Set(st.off||[]);
+    const vacSet=new Set(st.vac||[]);
     const leavesByDate = new Map();
-    state.leaves.filter(l=>isoMonth(l.date)===ym).forEach(l=>{ leavesByDate.set(l.date, (leavesByDate.get(l.date)||0)+l.hours ); });
+    state.leaves.filter(l=>isoMonth(l.date)===ym)
+      .forEach(l=>{ leavesByDate.set(l.date,(leavesByDate.get(l.date)||0)+l.hours); });
+
     for(let d=1; d<=days; d++){
       const iso=mkISO(y,m,d);
       const item=document.createElement('div');
+
       const dayShifts=state.shifts.filter(s=>s.date===iso);
       const has=dayShifts.length || offSet.has(iso) || vacSet.has(iso) || leavesByDate.has(iso);
-      item.className='day'+(has?' has':'')+(iso===today?' today':'')+(state.uiSelectedDay===iso?' selected':'');
+
+      item.className='day'
+        + (has?' has':'')
+        + (iso===today?' today':'')
+        + (state.uiSelectedDay===iso?' selected':'');
+
       let badge='';
       if(vacSet.has(iso)) badge='🏖️';
       else if(offSet.has(iso)) badge='⏳';
       else if(leavesByDate.has(iso)) badge='⏳';
       else if(dayShifts.length) badge='🔨';
+
       item.innerHTML=`<div class="num">${d}</div>${has?`<div class="badge">${badge}</div>`:''}`;
-      item.addEventListener('click',()=>{ state.uiSelectedDay=iso; ui.shiftDate.value=iso; renderCalendar(); openDay(iso); });
-      grid.appendChild(item);
+      item.addEventListener('click',()=>{
+        state.uiSelectedDay=iso;
+        ui.shiftDate.value=iso;
+        renderCalendar();
+        openDay(iso);
+      });
+
+      daysGrid.appendChild(item);
     }
+
     if(isoMonth(state.uiSelectedDay)===ym){ openDay(state.uiSelectedDay); }
     else { $('#dayDetailWrap').style.display='none'; }
   }
