@@ -80,16 +80,20 @@
 
     <div class="row">
       <div class="col-4">
-        <label>Дата</label>
+        <label>Дата подработки</label>
         <div class="toolbar" style="gap:8px">
           <input type="date" id="shiftDate" style="flex:1;min-width:0">
           <button class="btn small" id="todayBtn" type="button">Сегодня</button>
         </div>
       </div>
       <div class="col-4">
-        <label>Тип (определяется автоматически)</label>
-        <select id="shiftType" disabled>
-          <option>(определить автоматически)</option>
+        <label>Тип</label>
+        <select id="shiftType">
+          <option value="auto">(определить автоматически)</option>
+          <option value="weekday">Будни (сверхур.)</option>
+          <option value="saturday">Суббота</option>
+          <option value="sunday">Воскресенье</option>
+          <option value="holiday">Праздник</option>
         </select>
       </div>
       <div class="col-4">
@@ -106,10 +110,10 @@
     <div class="card" style="margin-top:8px">
       <div class="muted" style="margin-bottom:8px">Быстрые кнопки:</div>
       <div class="quick-grid">
-        <button class="btn" data-quick="hrs-3.5" type="button">3.5 ч</button>
-        <button class="btn" data-quick="hrs-8" type="button">8 ч</button>
-        <button class="btn" data-quick="off" type="button">Не работал</button>
-        <button class="btn" data-quick="vac" type="button">Отпуск</button>
+        <button class="btn" data-quick="weekday-3.5" type="button">Будни 3.5 ч</button>
+        <button class="btn" data-quick="sat-8" type="button">Суббота 8 ч</button>
+        <button class="btn" data-quick="sun-8" type="button">Воскресенье 8 ч</button>
+        <button class="btn" data-quick="hol-8" type="button">Праздник 8 ч</button>
       </div>
     </div>
 
@@ -140,7 +144,7 @@
 
     <div class="row">
       <div class="col-4">
-        <div>База (пропорц.): <span id="baseMonthlyOut">—</span></div>
+        <div>Оклад: <span id="baseMonthlyOut">—</span></div>
         <div class="muted">Почасовая: <span id="hourlyOut">—</span> ₽/ч</div>
       </div>
       <div class="col-4">
@@ -150,7 +154,6 @@
       <div class="col-4">
         <div>Итого к выплате:</div>
         <div class="total" id="grandTotal">—</div>
-        <div class="muted" id="vacInfo"></div>
       </div>
     </div>
   </section>
@@ -223,14 +226,14 @@
 
 <script>
 (function(){
-  const SKEY='paycalc_v4_1_autoavg';
+  const SKEY='paycalc_v3_9_auto';
   const $ = s=>document.querySelector(s);
   const $$ = s=>document.querySelectorAll(s);
   const pad = n => String(n).padStart(2,'0');
-  const mkISO = (y,m,d)=>\`\${y}-\${pad(m)}-\${pad(d)}\`;
+  const mkISO = (y,m,d)=>`${y}-${pad(m)}-${pad(d)}`;
   const todayISO = ()=>{const t=new Date();return mkISO(t.getFullYear(),t.getMonth()+1,t.getDate());};
   const isoMonth = d => (d||'').slice(0,7);
-  const addMonth = (ym,delta)=>{let[y,m]=ym.split('-').map(Number);m+=delta;while(m<1){m+=12;y--}while(m>12){m-=12;y++}return \`\${y}-\${pad(m)}\`};
+  const addMonth = (ym,delta)=>{let[y,m]=ym.split('-').map(Number);m+=delta;while(m<1){m+=12;y--}while(m>12){m-=12;y++}return `${y}-${pad(m)}`};
   const dayShort = d => new Date(d+'T00:00:00').toLocaleDateString('ru-RU',{weekday:'short'});
   const money = n => (Math.round(n)).toLocaleString('ru-RU');
 
@@ -240,94 +243,37 @@
     month: new Date().toISOString().slice(0,7),
     settings:{ baseMonthly:0, hoursPerDay:8, weekdayFirstMult:1.5, weekdayNextMult:2, satMult:1.5, sunMult:2, holidayMult:2 },
     holidaysByMonth:{},
-    statusesByMonth:{},
     shifts:[]
   };
 
-  function save(){ localStorage.setItem(SKEY, JSON.stringify(state)); }
-  function isWeekdayISO(iso){ const dow = new Date(iso+'T00:00:00').getDay(); return dow>=1 && dow<=5; }
+  // === AUTO WORKDAYS with holiday exclusion ===
+  function isWeekdayISO(iso){
+    const dow = new Date(iso+'T00:00:00').getDay(); // 0=sun..6=sat
+    return dow>=1 && dow<=5;
+  }
   function computeWorkdays(ym){
-    const [y,m]=ym.split('-').map(Number); const days=new Date(y,m,0).getDate();
-    let weekdays=0; for(let d=1; d<=days; d++){ const dow=new Date(y,m-1,d).getDay(); if(dow>=1 && dow<=5) weekdays++; }
-    const hol=new Set(state.holidaysByMonth[ym]||[]);
-    let weekdayHolidays=0; for(const iso of hol){ if(isWeekdayISO(iso)) weekdayHolidays++; }
+    const [y,m] = ym.split('-').map(Number);
+    const days = new Date(y,m,0).getDate();
+    let weekdays=0;
+    for(let d=1; d<=days; d++){
+      const dow = new Date(y,m-1,d).getDay();
+      if(dow>=1 && dow<=5) weekdays++;
+    }
+    const set = new Set(state.holidaysByMonth[ym]||[]);
+    let weekdayHolidays=0;
+    for(const iso of set){ if(isWeekdayISO(iso)) weekdayHolidays++; }
     return Math.max(0, weekdays - weekdayHolidays);
   }
-  function cryptoRandom(){ try{ return Array.from(crypto.getRandomValues(new Uint8Array(8))).map(b=>b.toString(16).padStart(2,'0')).join(''); }catch(_){ return Math.random().toString(36).slice(2,10); } }
-  function isHoliday(dateISO){ const set=new Set(state.holidaysByMonth[isoMonth(dateISO)]||[]); return set.has(dateISO); }
-  function getStatuses(ym){ const s=state.statusesByMonth[ym]||{off:[],vac:[]}; state.statusesByMonth[ym]=s; return s; }
 
-  function hourly(ym){
-    const s=state.settings; const wd=computeWorkdays(ym);
-    if((s.baseMonthly||0)<=0 || wd<=0 || (s.hoursPerDay||0)<=0) return 0;
-    return s.baseMonthly / (wd * s.hoursPerDay);
-  }
-  function payForShift(shift, hr){
-    const h=shift.hours, s=state.settings;
-    if(shift.type==='holiday') return h*s.holidayMult*hr;
-    if(shift.type==='weekday'){ const first=Math.min(h,2)*s.weekdayFirstMult*hr; const next=Math.max(0,h-2)*s.weekdayNextMult*hr; return first+next; }
-    if(shift.type==='saturday') return h*s.satMult*hr;
-    if(shift.type==='sunday') return h*s.sunMult*hr;
-    return 0;
-  }
+  function save(){ localStorage.setItem(SKEY, JSON.stringify(state)); }
 
-  function lastMonths(ym, n){
-    let res=[]; let cur=ym;
-    for(let i=0;i<n;i++){ cur = addMonth(cur,-1); res.push(cur); }
-    return res;
-  }
-
-  function averageDaily(ym){
-    const months = lastMonths(ym, 12);
-    let sum = 0;
-    const base = state.settings.baseMonthly||0;
-    months.forEach(m=>{
-      const hasData = (state.shifts.some(s=>isoMonth(s.date)===m) ||
-                       (state.statusesByMonth[m] && ((state.statusesByMonth[m].off||[]).length || (state.statusesByMonth[m].vac||[]).length)) ||
-                       (state.holidaysByMonth[m] && (state.holidaysByMonth[m].length)));
-      if(hasData){
-        sum += monthlyTotals(m).sum;
-      }else{
-        sum += base;
-      }
-    });
-    return sum / (29.3 * 12);
-  }
-
-  function monthlyTotals(ym){
-    const hr = hourly(ym);
-    const rows = state.shifts.filter(s=>isoMonth(s.date)===ym);
-    const overtime = rows.reduce((a,s)=>a+payForShift(s,hr),0);
-    const otHours = rows.reduce((a,s)=>a+s.hours,0);
-
-    const wd = computeWorkdays(ym);
-    const st = getStatuses(ym);
-    const offWeekdays = (st.off||[]).filter(isWeekdayISO).length;
-    const vacWeekdays = (st.vac||[]).filter(isWeekdayISO).length;
-    const base = state.settings.baseMonthly||0;
-    const baseEff = (wd>0) ? base * ((wd - offWeekdays - vacWeekdays) / wd) : 0;
-
-    const vacDays = (st.vac||[]).length;
-    const avg = averageDaily(ym);
-    const vacPay = avg * vacDays;
-
-    return {baseEff, overtime, vacPay, otHours, sum: baseEff + overtime + vacPay};
-  }
-
-  function autoType(dateISO){
-    if(isHoliday(dateISO)) return 'holiday';
-    const dow=new Date(dateISO+'T00:00:00').getDay();
-    if(dow===0) return 'sunday';
-    if(dow===6) return 'saturday';
-    return 'weekday';
-  }
-
+  // ---- UI refs
   const ui = {
     tabs: $$('.tab'), panes: $$('section.card'),
     shiftDate: $('#shiftDate'), todayBtn: $('#todayBtn'), shiftType: $('#shiftType'), shiftHours: $('#shiftHours'), addShift: $('#addShift'), dayInfo: $('#dayInfo'),
     monthTitle: $('#monthTitle'), prevMonth: $('#prevMonth'), nextMonth: $('#nextMonth'), cal: $('#calendarGrid'), detail: $('#dayDetail'),
     modePills: $$('.pill'), rows: $('#rows'), totalOvertime: $('#totalOvertime'),
-    baseMonthlyOut: $('#baseMonthlyOut'), hourlyOut: $('#hourlyOut'), overtimeOut: $('#overtimeOut'), otHoursOut: $('#otHoursOut'), grandTotal: $('#grandTotal'), vacInfo: $('#vacInfo'),
+    baseMonthlyOut: $('#baseMonthlyOut'), hourlyOut: $('#hourlyOut'), overtimeOut: $('#overtimeOut'), otHoursOut: $('#otHoursOut'), grandTotal: $('#grandTotal'),
     monthFilter: $('#monthFilter'), baseMonthly: $('#baseMonthly'), autoWorkdays: $('#autoWorkdays'), hoursPerDay: $('#hoursPerDay'),
     weekdayFirstMult: $('#weekdayFirstMult'), weekdayNextMult: $('#weekdayNextMult'), satMult: $('#satMult'), sunMult: $('#sunMult'), holidayMult: $('#holidayMult'),
     themeSelect: $('#themeSelect'), updateBtn: $('#updateAppBtn'), updateStatus: $('#updateStatus'),
@@ -336,6 +282,7 @@
     exportJSON: $('#exportJSON'), importFile: $('#importFile'), clearAll: $('#clearAll')
   };
 
+  // ---- init
   document.documentElement.setAttribute('data-theme', state.theme);
   ui.themeSelect.value = state.theme;
   ui.shiftDate.value = todayISO();
@@ -343,6 +290,7 @@
   Object.entries(state.settings).forEach(([k,v])=>{ if(ui[k]) ui[k].value=v; });
   ui.autoWorkdays.value = computeWorkdays(state.month);
 
+  // ---- tabs
   ui.tabs.forEach(b=>b.addEventListener('click', ()=>{
     ui.tabs.forEach(x=>x.classList.remove('active')); b.classList.add('active');
     const tab=b.dataset.tab; ui.panes.forEach(p=>p.style.display=(p.dataset.pane===tab?'block':'none'));
@@ -351,6 +299,7 @@
     if(tab==='journal'){ renderAll(); }
   }));
 
+  // ---- mode switch
   ui.modePills.forEach(p=>p.addEventListener('click', ()=>{
     ui.modePills.forEach(x=>x.classList.remove('active')); p.classList.add('active');
     const mode=p.dataset.mode;
@@ -358,30 +307,19 @@
     document.getElementById('listCard').style.display = (mode==='list'?'block':'none');
   }));
 
+  // ---- actions
   ui.todayBtn.addEventListener('click', ()=>{ ui.shiftDate.value = todayISO(); });
   ui.addShift.addEventListener('click', onAddShift);
   ui.shiftHours.addEventListener('keydown', e=>{ if(e.key==='Enter') onAddShift(); });
 
   document.querySelectorAll('.quick-grid .btn').forEach(btn=>btn.addEventListener('click', ()=>{
     const code=btn.dataset.quick, date=ui.shiftDate.value||todayISO();
-    if(code==='hrs-3.5' || code==='hrs-8'){
-      const hours = code==='hrs-3.5' ? 3.5 : 8;
-      const type = autoType(date);
-      const st=getStatuses(isoMonth(date)); st.off=st.off.filter(x=>x!==date); st.vac=st.vac.filter(x=>x!==date);
-      state.shifts.push({id:cryptoRandom(), date, type, hours}); save(); renderAll(); return;
-    }
-    if(code==='off'){
-      const st=getStatuses(isoMonth(date)); const set=new Set(st.off);
-      if(set.has(date)){ st.off = st.off.filter(x=>x!==date); } else { set.add(date); st.off = Array.from(set).sort(); st.vac=st.vac.filter(x=>x!==date); }
-      state.shifts = state.shifts.filter(s=>s.date!==date);
-      save(); renderAll(); return;
-    }
-    if(code==='vac'){
-      const st=getStatuses(isoMonth(date)); const set=new Set(st.vac);
-      if(set.has(date)){ st.vac = st.vac.filter(x=>x!==date); } else { set.add(date); st.vac = Array.from(set).sort(); st.off=st.off.filter(x=>x!==date); }
-      state.shifts = state.shifts.filter(s=>s.date!==date);
-      save(); renderAll(); return;
-    }
+    let type='weekday', hours=0;
+    if(code==='weekday-3.5'){type='weekday';hours=3.5}
+    if(code==='sat-8'){type='saturday';hours=8}
+    if(code==='sun-8'){type='sunday';hours=8}
+    if(code==='hol-8'){type='holiday';hours=8}
+    state.shifts.push({id:cryptoRandom(), date, type, hours}); save(); renderAll();
   }));
 
   ui.prevMonth.addEventListener('click', ()=>{ state.month=addMonth(state.month,-1); onMonthChanged(); });
@@ -393,6 +331,7 @@
   });
   ui.themeSelect.addEventListener('change', e=>{ state.theme=e.target.value; document.documentElement.setAttribute('data-theme', state.theme); save(); });
 
+  // import/export
   ui.exportJSON.addEventListener('click', ()=>{
     const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='paycalc_data.json'; a.click();
@@ -406,7 +345,6 @@
         month:data.month||state.month,
         settings:Object.assign({},state.settings,data.settings||{}),
         holidaysByMonth:data.holidaysByMonth||{},
-        statusesByMonth:data.statusesByMonth||{},
         shifts:Array.isArray(data.shifts)?data.shifts:state.shifts
       });
       document.documentElement.setAttribute('data-theme', state.theme);
@@ -420,8 +358,8 @@
   });
   ui.clearAll.addEventListener('click', ()=>{ if(confirm('Точно удалить все данные?')){ localStorage.removeItem(SKEY); location.reload(); } });
 
-  /* service worker disabled in debug build to avoid cache issues */
-if(false){
+  // обновление приложения (Service Worker)
+  if('serviceWorker' in navigator){
     navigator.serviceWorker.addEventListener('controllerchange', ()=>location.reload());
     ui.updateBtn.addEventListener('click', async ()=>{
       ui.updateStatus.textContent='Проверяем обновления...';
@@ -434,15 +372,32 @@ if(false){
         else { ui.updateStatus.textContent='Новых обновлений нет'; }
       }catch(err){ ui.updateStatus.textContent='Ошибка: '+err; }
     });
-    window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw.js?v=autoavg'); });
+    window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw.js?v=auto'); });
+  }
+
+  // ---- logic
+  function cryptoRandom(){ try{ return Array.from(crypto.getRandomValues(new Uint8Array(8))).map(b=>b.toString(16).padStart(2,'0')).join(''); }catch(_){ return Math.random().toString(36).slice(2,10); } }
+  function isHoliday(dateISO){ const set=new Set(state.holidaysByMonth[isoMonth(dateISO)]||[]); return set.has(dateISO); }
+  function autoType(dateISO){ if(isHoliday(dateISO)) return 'holiday'; const dow=new Date(dateISO+'T00:00:00').getDay(); if(dow===0) return 'sunday'; if(dow===6) return 'saturday'; return 'weekday'; }
+  function hourly(ym){
+    const s=state.settings; const wd = computeWorkdays(ym);
+    if((s.baseMonthly||0)<=0 || wd<=0 || (s.hoursPerDay||0)<=0) return 0;
+    return s.baseMonthly / (wd * s.hoursPerDay);
+  }
+  function payForShift(shift, hr){
+    const h=shift.hours, s=state.settings;
+    if(shift.type==='holiday') return h*s.holidayMult*hr;
+    if(shift.type==='weekday'){ const first=Math.min(h,2)*s.weekdayFirstMult*hr; const next=Math.max(0,h-2)*s.weekdayNextMult*hr; return first+next; }
+    if(shift.type==='saturday') return h*s.satMult*hr;
+    if(shift.type==='sunday') return h*s.sunMult*hr;
+    return 0;
   }
 
   function onAddShift(){
     const date=ui.shiftDate.value||todayISO();
-    const hours=parseFloat(ui.shiftHours.value);
+    let type=ui.shiftType.value; const hours=parseFloat(ui.shiftHours.value);
     if(!hours||hours<=0){ alert('Укажите часы (>0)'); return; }
-    const type=autoType(date);
-    const st=getStatuses(isoMonth(date)); st.off=st.off.filter(x=>x!==date); st.vac=st.vac.filter(x=>x!==date);
+    if(type==='auto') type=autoType(date);
     state.shifts.push({id:cryptoRandom(), date, type, hours});
     ui.shiftHours.value=''; save(); renderAll();
   }
@@ -453,8 +408,11 @@ if(false){
     save(); renderAll();
   }
 
+  // ---- render
   function renderAll(){
+    // ВАЖНО: пересчитать авто-рабочие дни при каждом ререндере
     ui.autoWorkdays.value = computeWorkdays(state.month);
+
     renderCalendar();
     renderList();
     renderTotals();
@@ -466,24 +424,12 @@ if(false){
     const rows=state.shifts.filter(s=>isoMonth(s.date)===ym);
     const sum=rows.reduce((a,s)=>a+payForShift(s,hr),0);
     const hours=rows.reduce((a,s)=>a+s.hours,0);
-
-    const wd = computeWorkdays(ym);
-    const st = getStatuses(ym);
-    const offWeekdays = (st.off||[]).filter(isWeekdayISO).length;
-    const vacWeekdays = (st.vac||[]).filter(isWeekdayISO).length;
     const base=state.settings.baseMonthly||0;
-    const baseEff = (wd>0) ? base * ((wd - offWeekdays - vacWeekdays) / wd) : 0;
-
-    const vacDays = (st.vac||[]).length;
-    const avg = averageDaily(ym);
-    const vacPay = avg * vacDays;
-
-    ui.baseMonthlyOut.textContent = base>0 ? money(baseEff)+' ₽' : 'не задан';
+    ui.baseMonthlyOut.textContent = base>0 ? money(base)+' ₽' : 'не задан';
     ui.hourlyOut.textContent = hr>0 ? money(hr) : '—';
     ui.overtimeOut.textContent = money(sum)+' ₽';
     ui.otHoursOut.textContent = hours.toFixed(2);
-    ui.grandTotal.textContent = money(baseEff + sum + vacPay)+' ₽';
-    ui.vacInfo.textContent = vacDays>0 ? \`Отпуск: \${vacDays} дн • \${money(vacPay)} ₽ (ср. дневн.: \${money(avg)})\` : '';
+    ui.grandTotal.textContent = money(base+sum)+' ₽';
   }
 
   function renderList(){
@@ -494,10 +440,10 @@ if(false){
       const pay=payForShift(s,hr); total+=pay;
       const tr=document.createElement('tr');
       const tName=s.type==='weekday'?'Будни (сверхур.)':s.type==='saturday'?'Суббота':s.type==='sunday'?'Воскресенье':'Праздник';
-      tr.innerHTML=\`<td>\${s.date}</td><td>\${dayShort(s.date)}</td><td>\${tName}</td>
-        <td class="right">\${s.hours.toFixed(2)}</td><td class="right">\${hr>0?money(hr):'—'}</td><td class="right">\${money(pay)}</td>
-        <td class="right"><button class="btn small" data-edit="\${s.id}" type="button">Ред.</button>
-        <button class="btn small danger" data-del="\${s.id}" type="button">Удал.</button></td>\`;
+      tr.innerHTML=`<td>${s.date}</td><td>${dayShort(s.date)}</td><td>${tName}</td>
+        <td class="right">${s.hours.toFixed(2)}</td><td class="right">${hr>0?money(hr):'—'}</td><td class="right">${money(pay)}</td>
+        <td class="right"><button class="btn small" data-edit="${s.id}" type="button">Ред.</button>
+        <button class="btn small danger" data-del="${s.id}" type="button">Удал.</button></td>`;
       tb.appendChild(tr);
     });
     ui.totalOvertime.textContent = money(total);
@@ -524,16 +470,12 @@ if(false){
     ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(h=>{const d=document.createElement('div');d.className='day-head';d.textContent=h;grid.appendChild(d);});
     for(let i=0;i<start;i++) grid.appendChild(document.createElement('div'));
     const today=todayISO();
-    const st=getStatuses(ym);
-    const offSet=new Set(st.off||[]), vacSet=new Set(st.vac||[]);
     for(let d=1; d<=days; d++){
       const iso=mkISO(y,m,d);
       const item=document.createElement('div');
       const dayShifts=state.shifts.filter(s=>s.date===iso);
-      const has=dayShifts.length || offSet.has(iso) || vacSet.has(iso);
-      item.className='day'+(has?' has':'')+(iso===today?' today':'');
-      let badge=''; if(vacSet.has(iso)) badge='🏖️'; else if(offSet.has(iso)) badge='🚫'; else if(dayShifts.length) badge='🔨';
-      item.innerHTML=\`<div class="num">\${d}</div>\${has?\`<div class="badge">\${badge}</div>\`:''}\`;
+      item.className='day'+(dayShifts.length?' has':'')+(iso===today?' today':'');
+      item.innerHTML=`<div class="num">${d}</div>${dayShifts.length?'<div class="badge">🔨</div>':''}`;
       item.addEventListener('click',()=>showDayDetail(iso,dayShifts, hourly(isoMonth(iso))));
       grid.appendChild(item);
     }
@@ -542,22 +484,18 @@ if(false){
   function showDayDetail(iso, dayShifts, hr){
     const box=document.getElementById('dayDetail'); box.innerHTML='';
     const head=document.createElement('div'); head.style.display='flex'; head.style.justifyContent='space-between'; head.style.alignItems='center';
-    head.innerHTML=\`<div class="total">\${iso} — \${new Date(iso+'T00:00:00').toLocaleDateString('ru-RU',{weekday:'long'})}</div>\`;
-    const bar=document.createElement('div'); bar.className='toolbar';
-    const bOff=document.createElement('button'); bOff.className='btn small'; bOff.textContent='Не работал';
-    const bVac=document.createElement('button'); bVac.className='btn small'; bVac.textContent='Отпуск';
-    bOff.onclick=()=>{ const st=getStatuses(isoMonth(iso)); const set=new Set(st.off); if(set.has(iso)) st.off=st.off.filter(x=>x!==iso); else { set.add(iso); st.off=Array.from(set).sort(); st.vac=st.vac.filter(x=>x!==iso);} state.shifts=state.shifts.filter(s=>s.date!==iso); save(); renderAll(); };
-    bVac.onclick=()=>{ const st=getStatuses(isoMonth(iso)); const set=new Set(st.vac); if(set.has(iso)) st.vac=st.vac.filter(x=>x!==iso); else { set.add(iso); st.vac=Array.from(set).sort(); st.off=st.off.filter(x=>x!==iso);} state.shifts=state.shifts.filter(s=>s.date!==iso); save(); renderAll(); };
-    bar.appendChild(bOff); bar.appendChild(bVac); head.appendChild(bar);
-    box.appendChild(head);
+    head.innerHTML=`<div class="total">${iso} — ${new Date(iso+'T00:00:00').toLocaleDateString('ru-RU',{weekday:'long'})}</div>`;
+    const clr=document.createElement('button'); clr.className='btn danger small'; clr.textContent='Очистить день';
+    clr.onclick=()=>{ if(confirm('Удалить все подработки за день?')){ state.shifts=state.shifts.filter(s=>s.date!==iso); save(); renderAll(); } };
+    head.appendChild(clr); box.appendChild(head);
 
     const wrap=document.createElement('div'); wrap.className='table-wrap';
-    wrap.innerHTML=\`<table><thead><tr><th>Тип</th><th class="right">Часы</th><th class="right">Оплата</th><th class="right">Действия</th></tr></thead>
-      <tbody>\${(dayShifts||[]).map(s=>{
+    wrap.innerHTML=`<table><thead><tr><th>Тип</th><th class="right">Часы</th><th class="right">Оплата</th><th class="right">Действия</th></tr></thead>
+      <tbody>${(dayShifts||[]).map(s=>{
         const t=s.type==='weekday'?'Будни (сверхур.)':s.type==='saturday'?'Суббота':s.type==='sunday'?'Воскресенье':'Праздник';
-        return \`<tr><td>\${t}</td><td class="right">\${s.hours.toFixed(2)}</td><td class="right">\${money(payForShift(s,hr))}</td>
-        <td class="right"><button class="btn small" data-edit="\${s.id}" type="button">Ред.</button>
-        <button class="btn small danger" data-del="\${s.id}" type="button">Удал.</button></td></tr>\`;}).join('')}</tbody></table>\`;
+        return `<tr><td>${t}</td><td class="right">${s.hours.toFixed(2)}</td><td class="right">${money(payForShift(s,hr))}</td>
+        <td class="right"><button class="btn small" data-edit="${s.id}" type="button">Ред.</button>
+        <button class="btn small danger" data-del="${s.id}" type="button">Удал.</button></td></tr>`;}).join('')}</tbody></table>`;
     box.appendChild(wrap);
 
     wrap.onclick = (e)=>{
@@ -587,7 +525,7 @@ if(false){
       b.onclick=()=>{
         if(set.has(iso)) set.delete(iso); else set.add(iso);
         state.holidaysByMonth[ym]=Array.from(set).sort(); save();
-        document.getElementById('autoWorkdays').value = computeWorkdays(ym);
+        ui.autoWorkdays.value = computeWorkdays(ym);
         renderAll();
       };
       grid.appendChild(b);
@@ -599,15 +537,16 @@ if(false){
     const list=document.getElementById('archiveList'); list.innerHTML='';
     const by={}; state.shifts.forEach(s=>{ const m=isoMonth(s.date); (by[m]||(by[m]=[])).push(s); });
     Object.keys(by).sort().reverse().forEach(m=>{
-      const t = monthlyTotals(m);
-      const rows=by[m].sort((a,b)=>a.date.localeCompare(b.date));
+      const hr=hourly(m); const rows=by[m].sort((a,b)=>a.date.localeCompare(b.date));
+      let total=0, hours=0; rows.forEach(s=>{ total+=payForShift(s,hr); hours+=s.hours; });
       const card=document.createElement('div'); card.className='card';
-      card.innerHTML=\`<div style="display:flex;justify-content:space-between;align-items:center"><div class="total">\${m}</div>
-        <div class="muted">часы: \${t.otHours.toFixed(1)} • подработки: \${money(t.overtime)} ₽ • база: \${money(t.baseEff)} ₽ • отпуск: \${money(t.vacPay)} ₽ • итого: \${money(t.sum)} ₽</div></div>\`;
+      card.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><div class="total">${m}</div>
+        <div class="muted">подработка: ${rows.length} • часов: ${hours.toFixed(1)} • сумма: ${money(total)} ₽</div></div>`;
       list.appendChild(card);
     });
   }
 
+  // initial render
   renderAll();
 })();
 </script>
