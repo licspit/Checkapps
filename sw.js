@@ -1,5 +1,5 @@
 // sw.js — сервис-воркер
-const CACHE_NAME = 'paycalc-v3.9.0'; // bump для обновления
+const CACHE_NAME = 'paycalc-v3.9.1'; // bump для обновления
 const ASSETS = ['./','./index.html'];
 
 self.addEventListener('install', (event) => {
