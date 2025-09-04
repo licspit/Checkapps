@@ -236,7 +236,22 @@
     shifts:[]
   };
 
-  function save(){ localStorage.setItem(SKEY, JSON.stringify(state)); }
+  function save(){
+  try{
+    localStorage.setItem(SKEY, JSON.stringify(state));
+  }catch(e){
+    console.warn('localStorage недоступен:', e);
+    // Показать ненавязчивое уведомление один раз
+    if(!document.getElementById('lsWarn')){
+      const div=document.createElement('div');
+      div.id='lsWarn';
+      div.textContent='Данные не сохраняются (режим приватности/квота). Кнопки работают, но без сохранения.';
+      div.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;padding:10px 12px;background:#5b1a1a;color:#fff;border-radius:10px;font:14px system-ui;z-index:9999';
+      document.body.appendChild(div);
+      setTimeout(()=>div.remove(), 6000);
+    }
+  }
+}
   function isWeekdayISO(iso){ const dow = new Date(iso+'T00:00:00').getDay(); return dow>=1 && dow<=5; }
   function computeWorkdays(ym){
     const [y,m]=ym.split('-').map(Number); const days=new Date(y,m,0).getDate();
