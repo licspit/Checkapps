@@ -1,5 +1,5 @@
 // sw.js v3 — network-first для навигации, учитывает query, новый CACHE_NAME
-const CACHE_NAME = 'paycalc-v3';
+const CACHE_NAME = 'v3';
 self.addEventListener('install', e => e.waitUntil(self.skipWaiting()));
 self.addEventListener('activate', e => e.waitUntil(
   caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))).then(()=>self.clients.claim())
