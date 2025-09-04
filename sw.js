@@ -1,5 +1,5 @@
 // sw.js — обновлённый, учитывает query и кэширует правильно
-const CACHE_NAME = 'paycalc-calgrid-v3'; // новое имя кэша!
+const CACHE_NAME = 'paycalc-calgrid-v4'; // новое имя кэша!
 
 self.addEventListener('install', e => {
   e.waitUntil(self.skipWaiting());
