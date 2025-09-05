@@ -1,5 +1,5 @@
 // sw.js — сервис-воркер
-const CACHE_NAME = 'paycalc-v4.1.1'; // bump for update
+const CACHE_NAME = 'paycalc-v4.1.2'; // bump for update
 const ASSETS = ['./','./index.html'];
 self.addEventListener('install', (event) => {event.waitUntil(caches.open(CACHE_NAME).then((c)=>c.addAll(ASSETS)).then(()=>self.skipWaiting()).catch(()=>{}));});
 self.addEventListener('activate', (event) => {event.waitUntil(caches.keys().then((keys)=>Promise.all(keys.filter((k)=>k!==CACHE_NAME).map((k)=>caches.delete(k)))).then(()=>self.clients.claim()));});
