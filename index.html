@@ -108,8 +108,7 @@
       <div class="quick-grid">
         <button class="btn" data-quick="hrs-3.5" type="button">3.5 ч</button>
         <button class="btn" data-quick="hrs-8" type="button">8 ч</button>
-        <button class="btn" data-quick="dayoff-hrs" type="button">Отгул (часы)</button>
-        <button class="btn" data-quick="off" type="button">Не работал</button>
+        <button class="btn" data-quick="dayoff-hrs" type="button">Отгул</button>
         <button class="btn" data-quick="vac" type="button">Отпуск</button>
       </div>
     </div>
@@ -173,13 +172,21 @@
         <input id="autoWorkdays" disabled>
       </div>
       <div class="col-3">
-        \1
+        <label>Часов в дне</label>
+        <input type="number" id="hoursPerDay" min="1" step="1" value="8">
+      </div>
+    </div>
+    <div class="row">
       <div class="col-6">
         <label>Тип отпуска</label>
         <select id="leaveMode">
           <option value="calendar">Календарный (все дни)</option>
           <option value="production">Производственный (только будни)</option>
         </select>
+      </div>
+      <div class="col-6">
+        <label>Тема</label>
+        <select id="themeSelect"><option value="dark">Тёмная</option><option value="light">Светлая</option></select>
       </div>
     </div>
     <div class="row">
@@ -190,10 +197,7 @@
     </div>
     <div class="row">
       <div class="col-3"><label>Праздник</label><input type="number" id="holidayMult" step="0.1" min="1" value="2"></div>
-      <div class="col-3"><label>Тема</label>
-        <select id="themeSelect"><option value="dark">Тёмная</option><option value="light">Светлая</option></select>
-      </div>
-      <div class="col-6">
+      <div class="col-9">
         <label>Обновление приложения</label>
         <div class="toolbar">
           <button class="btn" id="updateAppBtn" type="button">Обновить приложение</button>
@@ -274,7 +278,7 @@
     if(shift.type==='weekday'){ const first=Math.min(h,2)*s.weekdayFirstMult*hr; const next=Math.max(0,h-2)*s.weekdayNextMult*hr; return first+next; }
     if(shift.type==='saturday') return h*s.satMult*hr;
     if(shift.type==='sunday') return h*s.sunMult*hr;
-    return 0;
+    return 0; // dayoff и любые прочие — неоплачиваемые
   }
 
   function lastMonths(ym, n){
@@ -283,24 +287,30 @@
     return res;
   }
 
-  // === РАЗРЫВ РЕКУРСИИ: сырой расчёт месяца БЕЗ отпускных ===
+  // --- сырой расчёт месяца (без отпускных), с учётом "Отгула" ---
   function monthlyPartsRaw(ym){
     const hr = hourly(ym);
     const rows = state.shifts.filter(s=>isoMonth(s.date)===ym);
-    const overtime = rows.reduce((a,s)=>a+payForShift(s,hr),0);
-    const otHours = rows.reduce((a,s)=>a+s.hours,0);
+
+    const overtime = rows
+      .filter(s=>s.type!=='dayoff')
+      .reduce((a,s)=>a+payForShift(s,hr),0);
+
+    const otHours = rows
+      .filter(s=>s.type!=='dayoff')
+      .reduce((a,s)=>a+s.hours,0);
 
     const wd = computeWorkdays(ym);
     const st = getStatuses(ym);
     const offWeekdays = (st.off||[]).filter(isWeekdayISO).length;
     const vacWeekdays = (st.vac||[]).filter(isWeekdayISO).length;
     const base = state.settings.baseMonthly||0;
+
     let baseEff = (wd>0) ? base * ((wd - offWeekdays - vacWeekdays) / wd) : 0;
 
-    // учёт отгула по часам: sum(type==='dayoff') и вычитаем из базы по часовой ставке
+    // вычитаем «Отгул» по почасовой ставке
     const dayoffHours = rows.filter(s=>s.type==='dayoff').reduce((a,s)=>a+Number(s.hours||0),0);
-    const hr2 = hourly(ym);
-    baseEff = Math.max(0, baseEff - dayoffHours * hr2);
+    baseEff = Math.max(0, baseEff - dayoffHours * hr);
 
     const vacDays = (st.vac||[]).length;
     return { baseEff, overtime, otHours, vacDays, vacWeekdays };
@@ -316,7 +326,7 @@
                        (state.holidaysByMonth[m] && (state.holidaysByMonth[m].length)));
       if(hasData){
         const p = monthlyPartsRaw(m);
-        sum += (p.baseEff + p.overtime); // без отпускных, чтобы избежать рекурсии
+        sum += (p.baseEff + p.overtime); // без отпускных, чтобы не зациклиться
       }else{
         sum += base;
       }
@@ -359,8 +369,8 @@
   ui.shiftDate.value = todayISO();
   ui.monthFilter.value = state.month;
   Object.entries(state.settings).forEach(([k,v])=>{ if(ui[k]) ui[k].value=v; });
-      if(!state.settings.leaveMode){ state.settings.leaveMode='calendar'; }
-      const lmEl=document.getElementById('leaveMode'); if(lmEl){ lmEl.value=state.settings.leaveMode; }
+  if(!state.settings.leaveMode){ state.settings.leaveMode='calendar'; }
+  const lmEl=document.getElementById('leaveMode'); if(lmEl){ lmEl.value=state.settings.leaveMode; }
   ui.autoWorkdays.value = computeWorkdays(state.month);
 
   ui.tabs.forEach(b=>b.addEventListener('click', ()=>{
@@ -395,12 +405,6 @@
       const num=v? parseFloat(String(v).replace(',','.')):0;
       if(num>0){ const st=getStatuses(isoMonth(date)); st.off=st.off.filter(x=>x!==date); st.vac=st.vac.filter(x=>x!==date); state.shifts.push({id:cryptoRandom(), date, type:'dayoff', hours:num}); save(); renderAll(); }
       return;
-    }
-    if(code==='off'){
-      const st=getStatuses(isoMonth(date)); const set=new Set(st.off);
-      if(set.has(date)){ st.off = st.off.filter(x=>x!==date); } else { set.add(date); st.off = Array.from(set).sort(); st.vac=st.vac.filter(x=>x!==date); }
-      state.shifts = state.shifts.filter(s=>s.date!==date);
-      save(); renderAll(); return;
     }
     if(code==='vac'){
       const st=getStatuses(isoMonth(date)); const set=new Set(st.vac);
@@ -500,6 +504,14 @@
     ui.vacInfo.textContent = t.vacPay>0 ? `Отпуск: ${money(t.vacPay)} ₽ (дней: ${monthlyPartsRaw(ym).vacDays}, ср. дневн.: ${money(averageDaily(ym))})` : '';
   }
 
+  function typeName(t){
+    return t==='weekday'?'Будни (сверхур.)':
+           t==='saturday'?'Суббота':
+           t==='sunday'?'Воскресенье':
+           t==='holiday'?'Праздник':
+           t==='dayoff'?'Отгул':'—';
+  }
+
   function renderList(){
     const ym=state.month; const hr=hourly(ym);
     const data=state.shifts.filter(s=>isoMonth(s.date)===ym).sort((a,b)=>a.date.localeCompare(b.date));
@@ -507,8 +519,7 @@
     data.forEach(s=>{
       const pay=payForShift(s,hr); total+=pay;
       const tr=document.createElement('tr');
-      const tName=s.type==='weekday'?'Будни (сверхур.)':s.type==='saturday'?'Суббота':s.type==='sunday'?'Воскресенье':'Праздник';
-      tr.innerHTML=`<td>${s.date}</td><td>${dayShort(s.date)}</td><td>${tName}</td>
+      tr.innerHTML=`<td>${s.date}</td><td>${dayShort(s.date)}</td><td>${typeName(s.type)}</td>
         <td class="right">${s.hours.toFixed(2)}</td><td class="right">${hr>0?money(hr):'—'}</td><td class="right">${money(pay)}</td>
         <td class="right"><button class="btn small" data-edit="${s.id}" type="button">Ред.</button>
         <button class="btn small danger" data-del="${s.id}" type="button">Удал.</button></td>`;
@@ -522,8 +533,8 @@
       const s=state.shifts.find(x=>x.id===id); if(!s) return;
       if(b.dataset.edit!==undefined){
         const nh=parseFloat(prompt('Новые часы:', s.hours)); if(!nh||nh<=0) return;
-        let nt=prompt('Тип (weekday/saturday/sunday/holiday):', s.type) || s.type;
-        const allowed=new Set(['weekday','saturday','sunday','holiday']);
+        let nt=prompt('Тип (weekday/saturday/sunday/holiday/dayoff):', s.type) || s.type;
+        const allowed=new Set(['weekday','saturday','sunday','holiday','dayoff']);
         if(!allowed.has(nt)) nt=s.type;
         s.hours=nh; s.type=nt; save(); renderAll();
       }else{
@@ -568,18 +579,15 @@
     const head=document.createElement('div'); head.style.display='flex'; head.style.justifyContent='space-between'; head.style.alignItems='center';
     head.innerHTML=`<div class="total">${iso} — ${new Date(iso+'T00:00:00').toLocaleDateString('ru-RU',{weekday:'long'})}</div>`;
     const bar=document.createElement('div'); bar.className='toolbar';
-    const bOff=document.createElement('button'); bOff.className='btn small'; bOff.textContent='Не работал';
     const bVac=document.createElement('button'); bVac.className='btn small'; bVac.textContent='Отпуск';
-    bOff.onclick=()=>{ const st=getStatuses(isoMonth(iso)); const set=new Set(st.off); if(set.has(iso)) st.off=st.off.filter(x=>x!==iso); else { set.add(iso); st.off=Array.from(set).sort(); st.vac=st.vac.filter(x=>x!==iso);} state.shifts=state.shifts.filter(s=>s.date!==iso); save(); renderAll(); };
-    bVac.onclick=()=>{ const st=getStatuses(isoMonth(iso)); const set=new Set(st.vac); if(set.has(iso)) st.vac=st.vac.filter(x=>x!==iso); else { set.add(iso); st.vac=Array.from(set).sort(); st.off=st.off.filter(x=>x!==iso);} state.shifts=state.shifts.filter(s=>s.date!==iso); save(); renderAll(); };
-    bar.appendChild(bOff); bar.appendChild(bVac); head.appendChild(bar);
+    bVac.onclick=()=>{ const st=getStatuses(isoMonth(iso)); const set=new Set(st.vac); if(set.has(iso)) st.vac=st.vac.filter(x=>x!==iso); else { set.add(iso); st.vac=Array.from(set).sort(); } state.shifts=state.shifts.filter(s=>s.date!==iso); save(); renderAll(); };
+    bar.appendChild(bVac); head.appendChild(bar);
     box.appendChild(head);
 
     const wrap=document.createElement('div'); wrap.className='table-wrap';
     wrap.innerHTML=`<table><thead><tr><th>Тип</th><th class="right">Часы</th><th class="right">Оплата</th><th class="right">Действия</th></tr></thead>
       <tbody>${(dayShifts||[]).map(s=>{
-        const t=s.type==='weekday'?'Будни (сверхур.)':s.type==='saturday'?'Суббота':s.type==='sunday'?'Воскресенье':'Праздник';
-        return `<tr><td>${t}</td><td class="right">${s.hours.toFixed(2)}</td><td class="right">${money(payForShift(s,hr))}</td>
+        return `<tr><td>${typeName(s.type)}</td><td class="right">${s.hours.toFixed(2)}</td><td class="right">${money(payForShift(s,hr))}</td>
         <td class="right"><button class="btn small" data-edit="${s.id}" type="button">Ред.</button>
         <button class="btn small danger" data-del="${s.id}" type="button">Удал.</button></td></tr>`;}).join('')}</tbody></table>`;
     box.appendChild(wrap);
@@ -590,8 +598,8 @@
       const s=state.shifts.find(x=>x.id===id); if(!s) return;
       if(b.dataset.edit!==undefined){
         const nh=parseFloat(prompt('Новые часы:', s.hours)); if(!nh||nh<=0) return;
-        let nt=prompt('Тип (weekday/saturday/sunday/holiday):', s.type) || s.type;
-        const allowed=new Set(['weekday','saturday','sunday','holiday']);
+        let nt=prompt('Тип (weekday/saturday/sunday/holiday/dayoff):', s.type) || s.type;
+        const allowed=new Set(['weekday','saturday','sunday','holiday','dayoff']);
         if(!allowed.has(nt)) nt=s.type;
         s.hours=nh; s.type=nt; save(); renderAll(); showDayDetail(iso, state.shifts.filter(x=>x.date===iso), hr);
       }else{
