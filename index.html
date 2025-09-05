@@ -227,10 +227,10 @@
   const $ = s=>document.querySelector(s);
   const $$ = s=>document.querySelectorAll(s);
   const pad = n => String(n).padStart(2,'0');
-  const mkISO = (y,m,d)=>\`\${y}-\${pad(m)}-\${pad(d)}\`;
+  const mkISO = (y,m,d)=>`${y}-${pad(m)}-${pad(d)}`;
   const todayISO = ()=>{const t=new Date();return mkISO(t.getFullYear(),t.getMonth()+1,t.getDate());};
   const isoMonth = d => (d||'').slice(0,7);
-  const addMonth = (ym,delta)=>{let[y,m]=ym.split('-').map(Number);m+=delta;while(m<1){m+=12;y--}while(m>12){m-=12;y++}return \`\${y}-\${pad(m)}\`};
+  const addMonth = (ym,delta)=>{let[y,m]=ym.split('-').map(Number);m+=delta;while(m<1){m+=12;y--}while(m>12){m-=12;y++}return `${y}-${pad(m)}`};
   const dayShort = d => new Date(d+'T00:00:00').toLocaleDateString('ru-RU',{weekday:'short'});
   const money = n => (Math.round(n)).toLocaleString('ru-RU');
 
@@ -277,24 +277,8 @@
     return res;
   }
 
-  function averageDaily(ym){
-    const months = lastMonths(ym, 12);
-    let sum = 0;
-    const base = state.settings.baseMonthly||0;
-    months.forEach(m=>{
-      const hasData = (state.shifts.some(s=>isoMonth(s.date)===m) ||
-                       (state.statusesByMonth[m] && ((state.statusesByMonth[m].off||[]).length || (state.statusesByMonth[m].vac||[]).length)) ||
-                       (state.holidaysByMonth[m] && (state.holidaysByMonth[m].length)));
-      if(hasData){
-        sum += monthlyTotals(m).sum;
-      }else{
-        sum += base;
-      }
-    });
-    return sum / (29.3 * 12);
-  }
-
-  function monthlyTotals(ym){
+  // === РАЗРЫВ РЕКУРСИИ: сырой расчёт месяца БЕЗ отпускных ===
+  function monthlyPartsRaw(ym){
     const hr = hourly(ym);
     const rows = state.shifts.filter(s=>isoMonth(s.date)===ym);
     const overtime = rows.reduce((a,s)=>a+payForShift(s,hr),0);
@@ -307,10 +291,32 @@
     const base = state.settings.baseMonthly||0;
     const baseEff = (wd>0) ? base * ((wd - offWeekdays - vacWeekdays) / wd) : 0;
 
-    const vacDays = (st.vac||[]).length;
+    const vacDays = (st.vac||[]).length; // если нужно платить только за будни — отфильтровать isWeekdayISO
+    return { baseEff, overtime, otHours, vacDays };
+  }
+
+  function averageDaily(ym){
+    const months = lastMonths(ym, 12);
+    let sum = 0;
+    const base = state.settings.baseMonthly||0;
+    months.forEach(m=>{
+      const hasData = (state.shifts.some(s=>isoMonth(s.date)===m) ||
+                       (state.statusesByMonth[m] && ((state.statusesByMonth[m].off||[]).length || (state.statusesByMonth[m].vac||[]).length)) ||
+                       (state.holidaysByMonth[m] && (state.holidaysByMonth[m].length)));
+      if(hasData){
+        const p = monthlyPartsRaw(m);
+        sum += (p.baseEff + p.overtime); // без отпускных, чтобы избежать рекурсии
+      }else{
+        sum += base;
+      }
+    });
+    return sum / (29.3 * 12);
+  }
+
+  function monthlyTotals(ym){
+    const { baseEff, overtime, otHours, vacDays } = monthlyPartsRaw(ym);
     const avg = averageDaily(ym);
     const vacPay = avg * vacDays;
-
     return {baseEff, overtime, vacPay, otHours, sum: baseEff + overtime + vacPay};
   }
 
@@ -461,28 +467,15 @@
   }
 
   function renderTotals(){
-    const ym=state.month; const hr=hourly(ym);
-    const rows=state.shifts.filter(s=>isoMonth(s.date)===ym);
-    const sum=rows.reduce((a,s)=>a+payForShift(s,hr),0);
-    const hours=rows.reduce((a,s)=>a+s.hours,0);
+    const ym=state.month;
+    const t = monthlyTotals(ym);
 
-    const wd = computeWorkdays(ym);
-    const st = getStatuses(ym);
-    const offWeekdays = (st.off||[]).filter(isWeekdayISO).length;
-    const vacWeekdays = (st.vac||[]).filter(isWeekdayISO).length;
-    const base=state.settings.baseMonthly||0;
-    const baseEff = (wd>0) ? base * ((wd - offWeekdays - vacWeekdays) / wd) : 0;
-
-    const vacDays = (st.vac||[]).length;
-    const avg = averageDaily(ym);
-    const vacPay = avg * vacDays;
-
-    ui.baseMonthlyOut.textContent = base>0 ? money(baseEff)+' ₽' : 'не задан';
-    ui.hourlyOut.textContent = hr>0 ? money(hr) : '—';
-    ui.overtimeOut.textContent = money(sum)+' ₽';
-    ui.otHoursOut.textContent = hours.toFixed(2);
-    ui.grandTotal.textContent = money(baseEff + sum + vacPay)+' ₽';
-    ui.vacInfo.textContent = vacDays>0 ? \`Отпуск: \${vacDays} дн • \${money(vacPay)} ₽ (ср. дневн.: \${money(avg)})\` : '';
+    ui.baseMonthlyOut.textContent = (state.settings.baseMonthly||0)>0 ? money(t.baseEff)+' ₽' : 'не задан';
+    ui.hourlyOut.textContent = hourly(ym)>0 ? money(hourly(ym)) : '—';
+    ui.overtimeOut.textContent = money(t.overtime)+' ₽';
+    ui.otHoursOut.textContent = t.otHours.toFixed(2);
+    ui.grandTotal.textContent = money(t.sum)+' ₽';
+    ui.vacInfo.textContent = t.vacPay>0 ? `Отпуск: ${money(t.vacPay)} ₽ (дней: ${monthlyPartsRaw(ym).vacDays}, ср. дневн.: ${money(averageDaily(ym))})` : '';
   }
 
   function renderList(){
@@ -493,10 +486,10 @@
       const pay=payForShift(s,hr); total+=pay;
       const tr=document.createElement('tr');
       const tName=s.type==='weekday'?'Будни (сверхур.)':s.type==='saturday'?'Суббота':s.type==='sunday'?'Воскресенье':'Праздник';
-      tr.innerHTML=\`<td>\${s.date}</td><td>\${dayShort(s.date)}</td><td>\${tName}</td>
-        <td class="right">\${s.hours.toFixed(2)}</td><td class="right">\${hr>0?money(hr):'—'}</td><td class="right">\${money(pay)}</td>
-        <td class="right"><button class="btn small" data-edit="\${s.id}" type="button">Ред.</button>
-        <button class="btn small danger" data-del="\${s.id}" type="button">Удал.</button></td>\`;
+      tr.innerHTML=`<td>${s.date}</td><td>${dayShort(s.date)}</td><td>${tName}</td>
+        <td class="right">${s.hours.toFixed(2)}</td><td class="right">${hr>0?money(hr):'—'}</td><td class="right">${money(pay)}</td>
+        <td class="right"><button class="btn small" data-edit="${s.id}" type="button">Ред.</button>
+        <button class="btn small danger" data-del="${s.id}" type="button">Удал.</button></td>`;
       tb.appendChild(tr);
     });
     ui.totalOvertime.textContent = money(total);
@@ -507,7 +500,9 @@
       const s=state.shifts.find(x=>x.id===id); if(!s) return;
       if(b.dataset.edit!==undefined){
         const nh=parseFloat(prompt('Новые часы:', s.hours)); if(!nh||nh<=0) return;
-        const nt=prompt('Тип (weekday/saturday/sunday/holiday):', s.type) || s.type;
+        let nt=prompt('Тип (weekday/saturday/sunday/holiday):', s.type) || s.type;
+        const allowed=new Set(['weekday','saturday','sunday','holiday']);
+        if(!allowed.has(nt)) nt=s.type;
         s.hours=nh; s.type=nt; save(); renderAll();
       }else{
         state.shifts=state.shifts.filter(x=>x.id!==id); save(); renderAll();
@@ -529,11 +524,19 @@
       const iso=mkISO(y,m,d);
       const item=document.createElement('div');
       const dayShifts=state.shifts.filter(s=>s.date===iso);
-      const has=dayShifts.length || offSet.has(iso) || vacSet.has(iso);
+      const isHol = isHoliday(iso);
+      const has = dayShifts.length || offSet.has(iso) || vacSet.has(iso) || isHol;
       item.className='day'+(has?' has':'')+(iso===today?' today':'');
-      let badge=''; if(vacSet.has(iso)) badge='🏖️'; else if(offSet.has(iso)) badge='🚫'; else if(dayShifts.length) badge='🔨';
-      item.innerHTML=\`<div class="num">\${d}</div>\${has?\`<div class="badge">\${badge}</div>\`:''}\`;
-      item.addEventListener('click',()=>showDayDetail(iso,dayShifts, hourly(isoMonth(iso))));
+      let badge='';
+      if(vacSet.has(iso)) badge='🏖️';
+      else if(offSet.has(iso)) badge='🚫';
+      else if(isHol) badge='🎉';
+      else if(dayShifts.length) badge='🔨';
+      item.innerHTML=`<div class="num">${d}</div>${has?`<div class="badge">${badge}</div>`:''}`;
+      item.addEventListener('click',()=>{
+        ui.shiftDate.value = iso; // синхронизация формы
+        showDayDetail(iso,dayShifts, hourly(isoMonth(iso)));
+      });
       grid.appendChild(item);
     }
   }
@@ -541,7 +544,7 @@
   function showDayDetail(iso, dayShifts, hr){
     const box=document.getElementById('dayDetail'); box.innerHTML='';
     const head=document.createElement('div'); head.style.display='flex'; head.style.justifyContent='space-between'; head.style.alignItems='center';
-    head.innerHTML=\`<div class="total">\${iso} — \${new Date(iso+'T00:00:00').toLocaleDateString('ru-RU',{weekday:'long'})}</div>\`;
+    head.innerHTML=`<div class="total">${iso} — ${new Date(iso+'T00:00:00').toLocaleDateString('ru-RU',{weekday:'long'})}</div>`;
     const bar=document.createElement('div'); bar.className='toolbar';
     const bOff=document.createElement('button'); bOff.className='btn small'; bOff.textContent='Не работал';
     const bVac=document.createElement('button'); bVac.className='btn small'; bVac.textContent='Отпуск';
@@ -551,12 +554,12 @@
     box.appendChild(head);
 
     const wrap=document.createElement('div'); wrap.className='table-wrap';
-    wrap.innerHTML=\`<table><thead><tr><th>Тип</th><th class="right">Часы</th><th class="right">Оплата</th><th class="right">Действия</th></tr></thead>
-      <tbody>\${(dayShifts||[]).map(s=>{
+    wrap.innerHTML=`<table><thead><tr><th>Тип</th><th class="right">Часы</th><th class="right">Оплата</th><th class="right">Действия</th></tr></thead>
+      <tbody>${(dayShifts||[]).map(s=>{
         const t=s.type==='weekday'?'Будни (сверхур.)':s.type==='saturday'?'Суббота':s.type==='sunday'?'Воскресенье':'Праздник';
-        return \`<tr><td>\${t}</td><td class="right">\${s.hours.toFixed(2)}</td><td class="right">\${money(payForShift(s,hr))}</td>
-        <td class="right"><button class="btn small" data-edit="\${s.id}" type="button">Ред.</button>
-        <button class="btn small danger" data-del="\${s.id}" type="button">Удал.</button></td></tr>\`;}).join('')}</tbody></table>\`;
+        return `<tr><td>${t}</td><td class="right">${s.hours.toFixed(2)}</td><td class="right">${money(payForShift(s,hr))}</td>
+        <td class="right"><button class="btn small" data-edit="${s.id}" type="button">Ред.</button>
+        <button class="btn small danger" data-del="${s.id}" type="button">Удал.</button></td></tr>`;}).join('')}</tbody></table>`;
     box.appendChild(wrap);
 
     wrap.onclick = (e)=>{
@@ -565,7 +568,9 @@
       const s=state.shifts.find(x=>x.id===id); if(!s) return;
       if(b.dataset.edit!==undefined){
         const nh=parseFloat(prompt('Новые часы:', s.hours)); if(!nh||nh<=0) return;
-        const nt=prompt('Тип (weekday/saturday/sunday/holiday):', s.type) || s.type;
+        let nt=prompt('Тип (weekday/saturday/sunday/holiday):', s.type) || s.type;
+        const allowed=new Set(['weekday','saturday','sunday','holiday']);
+        if(!allowed.has(nt)) nt=s.type;
         s.hours=nh; s.type=nt; save(); renderAll(); showDayDetail(iso, state.shifts.filter(x=>x.date===iso), hr);
       }else{
         state.shifts=state.shifts.filter(x=>x.id!==id); save(); renderAll(); showDayDetail(iso, state.shifts.filter(x=>x.date===iso), hr);
@@ -584,7 +589,8 @@
       const iso=mkISO(y,m,d); const b=document.createElement('button'); b.className='btn small'; b.textContent=d; b.type='button';
       if(set.has(iso)){ b.style.background='#3a1220'; b.style.borderColor='#5c1b2f'; }
       b.onclick=()=>{
-        if(set.has(iso)) set.delete(iso); else set.add(iso);
+        if(set.has(iso)){ set.delete(iso); b.style.background=''; b.style.borderColor=''; }
+        else { set.add(iso); b.style.background='#3a1220'; b.style.borderColor='#5c1b2f'; }
         state.holidaysByMonth[ym]=Array.from(set).sort(); save();
         document.getElementById('autoWorkdays').value = computeWorkdays(ym);
         renderAll();
@@ -599,10 +605,9 @@
     const by={}; state.shifts.forEach(s=>{ const m=isoMonth(s.date); (by[m]||(by[m]=[])).push(s); });
     Object.keys(by).sort().reverse().forEach(m=>{
       const t = monthlyTotals(m);
-      const rows=by[m].sort((a,b)=>a.date.localeCompare(b.date));
       const card=document.createElement('div'); card.className='card';
-      card.innerHTML=\`<div style="display:flex;justify-content:space-between;align-items:center"><div class="total">\${m}</div>
-        <div class="muted">часы: \${t.otHours.toFixed(1)} • подработки: \${money(t.overtime)} ₽ • база: \${money(t.baseEff)} ₽ • отпуск: \${money(t.vacPay)} ₽ • итого: \${money(t.sum)} ₽</div></div>\`;
+      card.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><div class="total">${m}</div>
+        <div class="muted">часы: ${t.otHours.toFixed(1)} • подработки: ${money(t.overtime)} ₽ • база: ${money(t.baseEff)} ₽ • отпуск: ${money(t.vacPay)} ₽ • итого: ${money(t.sum)} ₽</div></div>`;
       list.appendChild(card);
     });
   }
