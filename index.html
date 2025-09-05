@@ -99,7 +99,6 @@
         <label>Часы</label>
         <input type="number" id="shiftHours" min="0.25" step="0.25" placeholder="напр., 3.5">
       </div>
-      <!-- удалён пустой блок "Категория" -->
     </div>
 
     <div class="toolbar" style="margin-top:10px">
@@ -124,7 +123,7 @@
         <button class="btn small" id="nextMonth" type="button">Следующий ▶︎</button>
       </div>
 
-      <!-- НОВО: две отдельные сетки -->
+      <!-- Две независимые сетки -->
       <div class="calendar" id="calendarHeads"></div>
       <div class="calendar" id="calendarDays"></div>
 
@@ -205,7 +204,7 @@
         </div>
       </div>
     </div>
-    <div class="version-note">Версия приложения: <span id="appVersion">v6.7</span></div>
+    <div class="version-note">Версия приложения: <span id="appVersion">v6.8</span></div>
   </section>
 
   <!-- ПРАЗДНИКИ -->
@@ -231,7 +230,7 @@
 <script>
 (function(){
   const SKEY='paycalc_v64';
-  const APP_VERSION='v6.7';
+  const APP_VERSION='v6.8';
   const $ = s=>document.querySelector(s);
   const $$ = s=>document.querySelectorAll(s);
   const pad = n => String(n).padStart(2,'0');
@@ -284,22 +283,51 @@
   function getStatuses(ym){ const s=state.statusesByMonth[ym]||{off:[],vac:[]}; state.statusesByMonth[ym]=s; return s; }
   function lastMonths(ym, n){ let res=[]; let cur=ym; for(let i=0;i<n;i++){ cur = addMonth(cur,-1); res.push(cur); } return res; }
 
+  /* СРЕДНЕДНЕВНОЙ без рекурсии: база+подработки за 12 пред. месяцев (без отпускных) */
+  function accrualsForAverage(m){
+    const base = state.settings.baseMonthly||0;
+    const wd = computeWorkdays(m);
+    const hpd = state.settings.hoursPerDay||8;
+    const st = getStatuses(m);
+    const offWeekdays = (st.off||[]).filter(isWeekdayISO).length;
+    const vacWeekdays = (st.vac||[]).filter(isWeekdayISO).length;
+    const leavesHours = state.leaves.filter(l=>isoMonth(l.date)===m)
+                        .reduce((s,l)=> s + (isWorkingWeekdayISO(l.date)? l.hours : 0), 0);
+    const denom = wd;
+    const numer = Math.max(0, wd - offWeekdays - vacWeekdays - (hpd>0? leavesHours/hpd : 0));
+    const baseEff = denom>0 ? base * (numer/denom) : 0;
+
+    const hr = baseHourly(m);
+    const ot = state.shifts.filter(s=>isoMonth(s.date)===m)
+                .reduce((a,s)=> a + payForShift(s,hr), 0);
+
+    return baseEff + ot; // без отпускных
+  }
+  function averageDaily(ym){
+    const months = lastMonths(ym, 12);
+    const base = state.settings.baseMonthly||0;
+    let sum = 0;
+    months.forEach(m=>{
+      // если вообще нет записей за месяц — берём оклад как «начисления»
+      const hasAny = state.shifts.some(s=>isoMonth(s.date)===m) ||
+                     (state.statusesByMonth[m] && (state.statusesByMonth[m].off?.length || state.statusesByMonth[m].vac?.length)) ||
+                     (state.holidaysByMonth[m] && state.holidaysByMonth[m].length) ||
+                     state.leaves.some(l=>isoMonth(l.date)===m);
+      sum += hasAny ? accrualsForAverage(m) : base;
+    });
+    return sum / (29.3 * 12);
+  }
+
   function countVacationPaidDays(ym){
     const st=getStatuses(ym);
     const vac=(st.vac||[]).slice();
     if(state.settings.vacPayMode==='workdays'){ return vac.filter(isWeekdayISO).length; } else { return vac.length; }
   }
 
-  function monthLeaves(ym){ return state.leaves.filter(l => isoMonth(l.date)===ym); }
-  function monthLeavesWorkingHours(ym){
-    return monthLeaves(ym).reduce((sum,l)=> sum + (isWorkingWeekdayISO(l.date) ? l.hours : 0), 0);
-  }
-
   function monthlyTotals(ym){
     const hr = baseHourly(ym);
     const rows = state.shifts.filter(s=>isoMonth(s.date)===ym);
     const overtime = rows.reduce((a,s)=>a+payForShift(s,hr),0);
-    const otHours = rows.reduce((a,s)=>a+s.hours,0);
 
     const wd = computeWorkdays(ym);
     const st = getStatuses(ym);
@@ -307,10 +335,10 @@
     const vacWeekdays = (st.vac||[]).filter(isWeekdayISO).length;
 
     const base = state.settings.baseMonthly||0;
-    const baseHr = baseHourly(ym);
-
-    const unpaidHours = monthLeavesWorkingHours(ym);
     const hpd = state.settings.hoursPerDay||8;
+
+    const unpaidHours = state.leaves.filter(l=>isoMonth(l.date)===ym)
+                         .reduce((s,l)=> s + (isWorkingWeekdayISO(l.date)? l.hours : 0), 0);
     const unpaidDaysEq = (hpd>0) ? (unpaidHours / hpd) : 0;
 
     const denom = wd;
@@ -318,24 +346,10 @@
     const baseEff = denom>0 ? base * (numer / denom) : 0;
 
     const vacDaysPaid = countVacationPaidDays(ym);
-    const avg = averageDaily(ym);
+    const avg = averageDaily(ym); // теперь безопасно
     const vacPay = avg * vacDaysPaid;
 
-    return {baseEff, overtime, vacPay, otHours, vacDaysPaid, unpaidHours, baseHr, sum: baseEff + overtime + vacPay};
-  }
-
-  function averageDaily(ym){
-    const months = lastMonths(ym, 12);
-    let sum = 0;
-    const base = state.settings.baseMonthly||0;
-    months.forEach(m=>{
-      const hasData = (state.shifts.some(s=>isoMonth(s.date)===m) ||
-                       (state.statusesByMonth[m] && ((state.statusesByMonth[m].off||[]).length || (state.statusesByMonth[m].vac||[]).length)) ||
-                       (state.holidaysByMonth[m] && (state.holidaysByMonth[m].length)) ||
-                       (state.leaves && state.leaves.some(l=>isoMonth(l.date)===m)));
-      if(hasData){ sum += monthlyTotals(m).sum; } else { sum += base; }
-    });
-    return sum / (29.3 * 12);
+    return { baseEff, overtime, vacPay, sum: baseEff + overtime + vacPay };
   }
 
   function autoType(dateISO){
@@ -362,6 +376,7 @@
     appVersion: $('#appVersion')
   };
 
+  // Навигация по вкладкам
   ui.tabs.forEach(b=>b.addEventListener('click', ()=>{
     ui.tabs.forEach(x=>x.classList.remove('active')); b.classList.add('active');
     const tab=b.dataset.tab; ui.panes.forEach(p=>p.style.display=(p.dataset.pane===tab?'block':'none'));
@@ -369,28 +384,32 @@
     if(tab==='journal'){ renderAll(); }
   }));
 
+  // Инициализация UI
   document.documentElement.setAttribute('data-theme', state.theme);
   ui.themeSelect.value = state.theme;
   ui.shiftDate.value = todayISO();
   state.uiSelectedDay = state.uiSelectedDay || ui.shiftDate.value;
   ui.monthFilter.value = state.month;
   Object.entries(state.settings).forEach(([k,v])=>{ if(ui[k]) ui[k].value=v; });
-  const radios = document.querySelectorAll('input[name="vacPayMode"]');
-  radios.forEach(r=>{ r.checked = (r.value === (state.settings.vacPayMode||'calendar')); r.addEventListener('change', e=>{ state.settings.vacPayMode = e.target.value; safeSave(); renderAll(); }); });
+  document.querySelectorAll('input[name="vacPayMode"]').forEach(r=>{
+    r.checked = (r.value === (state.settings.vacPayMode||'calendar'));
+    r.addEventListener('change', e=>{ state.settings.vacPayMode = e.target.value; safeSave(); renderAll(); });
+  });
   ui.autoWorkdays.value = computeWorkdays(state.month);
   if(ui.appVersion) ui.appVersion.textContent = APP_VERSION;
 
   function applyModeUI(){
-    const mode = ui.modeSelect.value;
-    ui.quickCard.style.display = (mode==='overtime') ? 'block' : 'none';
+    ui.quickCard.style.display = (ui.modeSelect.value==='overtime') ? 'block' : 'none';
   }
   ui.modeSelect.addEventListener('change', applyModeUI);
   applyModeUI();
 
+  // События
   ui.todayBtn.addEventListener('click', ()=>{ ui.shiftDate.value = todayISO(); state.uiSelectedDay=ui.shiftDate.value; renderCalendar(); });
   ui.addShift.addEventListener('click', onAdd);
   ui.shiftHours.addEventListener('keydown', e=>{ if(e.key==='Enter') onAdd(); });
 
+  // Быстрые кнопки
   document.querySelectorAll('[data-quick]').forEach(btn=>btn.addEventListener('click', ()=>{
     if(ui.modeSelect.value!=='overtime') return;
     const code=btn.dataset.quick, date=ui.shiftDate.value||todayISO();
@@ -398,7 +417,7 @@
       const hours = code==='hrs-3.5' ? 3.5 : 8;
       const type = autoType(date);
       const st=getStatuses(isoMonth(date)); st.off=st.off.filter(x=>x!==date); st.vac=st.vac.filter(x=>x!==date);
-      state.shifts.push({id:cryptoRandom(), date, type, hours}); safeSave(); renderAll(); openDay(date); return;
+      state.shifts.push({id:rid(), date, type, hours}); safeSave(); renderAll(); openDay(date); return;
     }
     if(code==='off'){
       const st=getStatuses(isoMonth(date)); const set=new Set(st.off);
@@ -451,7 +470,7 @@
   });
   ui.clearAll.addEventListener('click', ()=>{ if(confirm('Точно удалить все данные?')){ try{localStorage.removeItem(SKEY)}catch(_){ } location.reload(); } });
 
-  function cryptoRandom(){ try{ return Array.from(crypto.getRandomValues(new Uint8Array(8))).map(b=>b.toString(16).padStart(2,'0')).join(''); }catch(_){ return Math.random().toString(36).slice(2,10); } }
+  function rid(){ try{ return Array.from(crypto.getRandomValues(new Uint8Array(8))).map(b=>b.toString(16).padStart(2,'0')).join(''); }catch(_){ return Math.random().toString(36).slice(2,10); } }
 
   function onAdd(){
     const date=ui.shiftDate.value||todayISO();
@@ -460,9 +479,9 @@
     if(ui.modeSelect.value==='overtime'){
       const type=autoType(date);
       const st=getStatuses(isoMonth(date)); st.off=st.off.filter(x=>x!==date); st.vac=st.vac.filter(x=>x!==date);
-      state.shifts.push({id:cryptoRandom(), date, type, hours});
+      state.shifts.push({id:rid(), date, type, hours});
     } else {
-      state.leaves.push({id:cryptoRandom(), date, hours});
+      state.leaves.push({id:rid(), date, hours});
     }
     ui.shiftHours.value=''; safeSave(); renderAll(); openDay(date);
   }
@@ -491,8 +510,8 @@
     const totals = monthlyTotals(ym);
     const baseEff = totals.baseEff;
     const vacPay = totals.vacPay;
-    const vacDaysPaid = totals.vacDaysPaid;
-    const baseHr = totals.baseHr;
+    const vacDaysPaid = countVacationPaidDays(ym);
+    const baseHr = baseHourly(ym);
 
     $('#baseMonthlyOut').textContent = (state.settings.baseMonthly||0)>0 ? money(baseEff)+' ₽' : 'не задан';
     $('#baseHourlyOut').textContent = baseHr>0 ? money(baseHr) : '—';
@@ -503,39 +522,25 @@
     $('#vacInfo').textContent = vacDaysPaid>0 ? `Отпускные: ${vacDaysPaid} ${modeText} дн • ${money(vacPay)} ₽ (среднедневной: ${money(averageDaily(ym))})` : '';
   }
 
-  /* НОВАЯ версия — две сетки: шапка и дни */
   function renderCalendar(){
     const ym=state.month, [y,m]=ym.split('-').map(Number);
-
-    // Заголовок месяца
     $('#monthTitle').textContent =
       new Date(y,m-1,1).toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
 
-    // Гриды
     const heads = $('#calendarHeads');
     const daysGrid = $('#calendarDays');
     heads.innerHTML = '';
     daysGrid.innerHTML = '';
 
-    // Шапка
     ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(h=>{
-      const d=document.createElement('div');
-      d.className='day-head';
-      d.textContent=h;
-      heads.appendChild(d);
+      const d=document.createElement('div'); d.className='day-head'; d.textContent=h; heads.appendChild(d);
     });
 
-    // Смещение
     const first=new Date(y,m-1,1);
-    const start=(first.getDay()+6)%7; // 0..6 (Пн..Вс)
+    const start=(first.getDay()+6)%7;
     const days=new Date(y,m,0).getDate();
 
-    // Пустые ячейки смещения только в блоке с днями
-    for(let i=0;i<start;i++){
-      const spacer=document.createElement('div');
-      spacer.style.visibility='hidden';
-      daysGrid.appendChild(spacer);
-    }
+    for(let i=0;i<start;i++){ const s=document.createElement('div'); s.style.visibility='hidden'; daysGrid.appendChild(s); }
 
     const today=todayISO();
     const st=getStatuses(ym);
