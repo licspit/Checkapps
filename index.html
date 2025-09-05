@@ -108,6 +108,7 @@
       <div class="quick-grid">
         <button class="btn" data-quick="hrs-3.5" type="button">3.5 ч</button>
         <button class="btn" data-quick="hrs-8" type="button">8 ч</button>
+        <button class="btn" data-quick="dayoff-hrs" type="button">Отгул (часы)</button>
         <button class="btn" data-quick="off" type="button">Не работал</button>
         <button class="btn" data-quick="vac" type="button">Отпуск</button>
       </div>
@@ -172,8 +173,13 @@
         <input id="autoWorkdays" disabled>
       </div>
       <div class="col-3">
-        <label>Часов в дне</label>
-        <input type="number" id="hoursPerDay" min="1" step="0.25" value="8">
+        \1
+      <div class="col-6">
+        <label>Тип отпуска</label>
+        <select id="leaveMode">
+          <option value="calendar">Календарный (все дни)</option>
+          <option value="production">Производственный (только будни)</option>
+        </select>
       </div>
     </div>
     <div class="row">
@@ -238,7 +244,7 @@
   const state = persisted || {
     theme:'dark',
     month: new Date().toISOString().slice(0,7),
-    settings:{ baseMonthly:0, hoursPerDay:8, weekdayFirstMult:1.5, weekdayNextMult:2, satMult:1.5, sunMult:2, holidayMult:2 },
+    settings:{ baseMonthly:0, hoursPerDay:8, leaveMode:'calendar', weekdayFirstMult:1.5, weekdayNextMult:2, satMult:1.5, sunMult:2, holidayMult:2 },
     holidaysByMonth:{},
     statusesByMonth:{},
     shifts:[]
@@ -289,10 +295,15 @@
     const offWeekdays = (st.off||[]).filter(isWeekdayISO).length;
     const vacWeekdays = (st.vac||[]).filter(isWeekdayISO).length;
     const base = state.settings.baseMonthly||0;
-    const baseEff = (wd>0) ? base * ((wd - offWeekdays - vacWeekdays) / wd) : 0;
+    let baseEff = (wd>0) ? base * ((wd - offWeekdays - vacWeekdays) / wd) : 0;
 
-    const vacDays = (st.vac||[]).length; // если нужно платить только за будни — отфильтровать isWeekdayISO
-    return { baseEff, overtime, otHours, vacDays };
+    // учёт отгула по часам: sum(type==='dayoff') и вычитаем из базы по часовой ставке
+    const dayoffHours = rows.filter(s=>s.type==='dayoff').reduce((a,s)=>a+Number(s.hours||0),0);
+    const hr2 = hourly(ym);
+    baseEff = Math.max(0, baseEff - dayoffHours * hr2);
+
+    const vacDays = (st.vac||[]).length;
+    return { baseEff, overtime, otHours, vacDays, vacWeekdays };
   }
 
   function averageDaily(ym){
@@ -314,9 +325,10 @@
   }
 
   function monthlyTotals(ym){
-    const { baseEff, overtime, otHours, vacDays } = monthlyPartsRaw(ym);
+    const { baseEff, overtime, otHours, vacDays, vacWeekdays } = monthlyPartsRaw(ym);
     const avg = averageDaily(ym);
-    const vacPay = avg * vacDays;
+    const daysForPay = (state.settings.leaveMode==='production') ? vacWeekdays : vacDays;
+    const vacPay = avg * daysForPay;
     return {baseEff, overtime, vacPay, otHours, sum: baseEff + overtime + vacPay};
   }
 
@@ -347,6 +359,8 @@
   ui.shiftDate.value = todayISO();
   ui.monthFilter.value = state.month;
   Object.entries(state.settings).forEach(([k,v])=>{ if(ui[k]) ui[k].value=v; });
+      if(!state.settings.leaveMode){ state.settings.leaveMode='calendar'; }
+      const lmEl=document.getElementById('leaveMode'); if(lmEl){ lmEl.value=state.settings.leaveMode; }
   ui.autoWorkdays.value = computeWorkdays(state.month);
 
   ui.tabs.forEach(b=>b.addEventListener('click', ()=>{
@@ -375,6 +389,12 @@
       const type = autoType(date);
       const st=getStatuses(isoMonth(date)); st.off=st.off.filter(x=>x!==date); st.vac=st.vac.filter(x=>x!==date);
       state.shifts.push({id:cryptoRandom(), date, type, hours}); save(); renderAll(); return;
+    }
+    if(code==='dayoff-hrs'){
+      const v=prompt('Сколько часов вычесть (отгул)?','2');
+      const num=v? parseFloat(String(v).replace(',','.')):0;
+      if(num>0){ const st=getStatuses(isoMonth(date)); st.off=st.off.filter(x=>x!==date); st.vac=st.vac.filter(x=>x!==date); state.shifts.push({id:cryptoRandom(), date, type:'dayoff', hours:num}); save(); renderAll(); }
+      return;
     }
     if(code==='off'){
       const st=getStatuses(isoMonth(date)); const set=new Set(st.off);
@@ -419,6 +439,8 @@
       ui.themeSelect.value=state.theme;
       ui.monthFilter.value=state.month;
       Object.entries(state.settings).forEach(([k,v])=>{ if(ui[k]) ui[k].value=v; });
+      if(!state.settings.leaveMode){ state.settings.leaveMode='calendar'; }
+      const lmEl=document.getElementById('leaveMode'); if(lmEl){ lmEl.value=state.settings.leaveMode; }
       ui.autoWorkdays.value = computeWorkdays(state.month);
       save(); renderAll();
     }catch(err){ alert('Ошибка импорта: '+err.message); }
