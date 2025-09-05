@@ -1,92 +1,64 @@
-/* paycalc service worker — v6 (kill-switch + надежное обновление)
-   - HTML: network-first, НЕ кэшируем (всегда свежий index.html)
-   - Остальное: cache-first + тихое обновление
-   - Kill-switch: ?kill-sw в URL или пост-сообщение DISABLE_SW полностью чистит кэши и отключает кэширование
-*/
-const CACHE_STATIC = 'paycalc-static-v6';
-let KILLED = false;
+/* Подработки — оффлайн-кэш (stale-while-revalidate) */
+const CACHE_VERSION = 'v1.0.0';
+const CACHE_NAME = `podrabotki-${CACHE_VERSION}`;
 
-async function clearAllCaches() {
-  const keys = await caches.keys();
-  await Promise.all(keys.map(k => caches.delete(k)));
-}
+/* Укажи здесь то, что точно нужно оффлайн */
+const CORE_ASSETS = [
+  './',               // для GitHub Pages корректнее "./"
+  './index.html',
+  './manifest.webmanifest',
+  // если есть иконки, добавь их:
+  // './icon-192.png',
+  // './icon-512.png',
+];
 
+/* Быстро активируем новый SW */
 self.addEventListener('install', (event) => {
-  event.waitUntil(self.skipWaiting());
+  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS))
+  );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(
-      keys.filter((k) => k !== CACHE_STATIC).map((k) => caches.delete(k))
-    );
-    await self.clients.claim();
-  })());
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(
+        keys.map((k) => (k === CACHE_NAME ? undefined : caches.delete(k)))
+      );
+      await self.clients.claim();
+    })()
+  );
 });
 
+/* Стратегия: stale-while-revalidate */
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-  const url = new URL(req.url);
 
-  if (url.search.includes('kill-sw')) {
-    event.respondWith((async ()=>{
-      KILLED = true;
-      await clearAllCaches();
-      try { return await fetch(req, { cache: 'no-store' }); }
-      catch { return new Response('Service Worker disabled', { status: 200 }); }
-    })());
-    return;
-  }
+  // Только GET кешируем
+  if (req.method !== 'GET') return;
 
-  if (KILLED) {
-    event.respondWith(fetch(req, { cache: 'no-store' }).catch(() => new Response('Offline', { status: 503 })));
-    return;
-  }
+  event.respondWith(
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(req, { ignoreSearch: true });
+      const fetchPromise = fetch(req)
+        .then((networkResp) => {
+          // удачный ответ — положим в кэш (не для ошибок/opaque)
+          if (
+            networkResp &&
+            networkResp.status === 200 &&
+            networkResp.type === 'basic'
+          ) {
+            cache.put(req, networkResp.clone());
+          }
+          return networkResp;
+        })
+        .catch(() => cached || Promise.reject(new Error('offline')));
 
-  const isHTML = req.mode === 'navigate' || (req.headers.get('accept')||'').includes('text/html');
-
-  // HTML — network-first, не кэшируем
-  if (isHTML) {
-    event.respondWith((async () => {
-      try {
-        return await fetch(req, { cache: 'no-store' });
-      } catch {
-        const cached = await caches.match(req);
-        return cached || new Response('<h1>Оффлайн</h1><p>Страница недоступна без сети.</p>',
-          { headers: { 'Content-Type':'text/html; charset=utf-8' }, status:503 });
-      }
-    })());
-    return;
-  }
-
-  // Остальное — cache-first + тихое обновление
-  event.respondWith((async () => {
-    const cache = await caches.open(CACHE_STATIC);
-    const cached = await cache.match(req);
-    if (cached) {
-      event.waitUntil((async () => {
-        try {
-          const fresh = await fetch(req, { cache: 'no-store' });
-          await cache.put(req, fresh.clone());
-        } catch {}
-      })());
-      return cached;
-    }
-    try {
-      const fresh = await fetch(req, { cache: 'no-store' });
-      await cache.put(req, fresh.clone());
-      return fresh;
-    } catch {
-      return new Response('Offline', { status: 503 });
-    }
-  })());
-});
-
-self.addEventListener('message', async (event) => {
-  if (event.data === 'DISABLE_SW') {
-    KILLED = true;
-    await clearAllCaches();
-    event.ports?.[0]?.postMessage?.({ ok: true });
-  }
+      // если есть кэш — отдаем его сразу, сеть обновит в фоне
+      return cached || fetchPromise;
+    })()
+  );
 });
