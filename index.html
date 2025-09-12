@@ -2,647 +2,950 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1">
 <title>Подработки и зарплата</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
 <meta name="theme-color" content="#0b0d12">
-<meta name="apple-mobile-web-app-capable" content="yes">
 <style>
-  *,*::before,*::after{box-sizing:border-box}
   :root{
-    --bg:#0f1115;--card:#151922;--cardSoft:#1a1f2a;--text:#e9eef5;--muted:#9aa5b1;--line:#242a34;
-    --accent:#3b82f6;--accent-bg:#1e2b49;--danger:#ef4444;--btn:#0f1320;--btnText:#e9eef5;
+    --bg:#0f1115; --card:#161b22; --mut:#9aa4b2; --text:#e6eef8; --accent:#3b82f6; --accent-2:#2563eb;
+    --ok:#16a34a; --danger:#ef4444; --pill:#0b1220; --border:#202735;
   }
-  :root[data-theme="light"]{
-    --bg:#f5f7fb;--card:#ffffff;--cardSoft:#f1f3f5;--text:#111827;--muted:#6b7280;--line:#e5e7eb;
-    --accent:#2563eb;--accent-bg:#dbe7ff;--danger:#b91c1c;--btn:#ffffff;--btnText:#111827;
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:16px/1.45 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial}
+  .wrap{max-width:940px;margin:0 auto;padding:16px}
+  .h1{font-weight:800;font-size:28px;margin:6px 0 14px}
+  .tabs{display:flex;gap:12px;margin:4px 0 14px}
+  .tab{border:1px solid var(--border);background:var(--card);color:var(--text);padding:10px 16px;border-radius:14px;cursor:pointer}
+  .tab.active{outline:2px solid var(--accent)}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin:12px 0}
+  .row{display:flex;gap:12px;align-items:center}
+  .row.wrap{flex-wrap:wrap}
+  .grow{flex:1;min-width:0}
+
+  /* отключаем double-tap zoom на кликабельных элементах */
+html, body { touch-action: manipulation; }
+.btn, .tab, .cal-day, label, input, select {
+  touch-action: manipulation;
+}
+
+      .btn{
+  border:1px solid var(--border);
+  background:#1f2937;
+  color:var(--text);
+  border-radius:14px;
+  padding:0 14px;
+  cursor:pointer;
+  height:44px;
+  white-space:nowrap;
+
+  /* НОВОЕ: идеальный центр */
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+      
+/* защита от зума при фокусе на инпутах в iOS: шрифт >= 16px */
+input, select { font-size:16px; }
+
+  .btn.primary{background:var(--accent);border-color:var(--accent-2)}
+  .btn.danger{background:#3a0d12;border-color:#7f1d1d}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+
+  input,select{width:100%;padding:0 14px;border-radius:12px;border:1px solid var(--border);
+               background:#0e1420;color:var(--text);height:44px}
+  .mut{color:var(--mut)}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media (max-width:780px){.grid-3{grid-template-columns:1fr}}
+
+  .quick{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:8px}
+  .quick .btn{padding:16px 8px;height:48px}
+  .pill{display:inline-flex;align-items:center;gap:6px;background:var(--pill);
+        padding:6px 10px;border-radius:999px;border:1px solid var(--border)}
+  .mtt{margin-top:8px}
+  .mt-8{margin-top:8px}
+  .section-title{font-weight:700;margin:2px 0 8px}
+
+      /* --- Импорт: красивый файл-инпут --- */
+.file-wrap{
+  display:grid;
+  grid-template-columns:auto 1fr; /* кнопка | имя файла */
+  gap:12px;
+  align-items:center;
+}
+.file-input{
+  position:absolute;
+  width:1px;height:1px;overflow:hidden;
+  clip:rect(0 0 0 0); clip-path: inset(50%);
+  white-space:nowrap;border:0;padding:0;margin:-1px;
+}
+.file-name{
+  display:flex;align-items:center;
+  height:44px;padding:0 14px;border-radius:12px;
+  background:#0e1420;border:1px solid var(--border);
+  color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* --- Импорт: ровная сетка --- */
+.import-grid{
+  display:grid;
+  grid-template-columns: 200px 1fr; /* левая узкая колонка + правая растяжимая */
+  grid-auto-rows: 44px;
+  column-gap:12px;
+  row-gap:12px;
+  align-items:center;
+}
+
+/* делаем .file-wrap «сквозной», чтобы её дети легли в сетку родителя */
+.import-grid .file-wrap{ display: contents; }
+
+      
+@media (max-width: 560px){
+  .import-grid{
+    grid-template-columns: 1fr;      /* одна колонка на мобилках */
+    grid-auto-rows:auto;
   }
-  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif}
-  header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px calc(14px + env(safe-area-inset-right)) 12px calc(14px + env(safe-area-inset-left));background:#0b0d12;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;color:#fff}
-  header h1{font-size:18px;margin:0;color:#fff}
-  .tabs{display:flex;gap:8px;overflow:auto;padding-bottom:4px}
-  .tab{padding:10px 12px;border:1px solid rgba(255,255,255,.25);border-radius:12px;background:transparent;color:#fff;cursor:pointer;flex:0 0 auto}
-  .tab.active{background:rgba(255,255,255,.18);border-color:transparent}
-  main{max-width:1000px;margin:0 auto;padding:12px env(safe-area-inset-right) 24px env(safe-area-inset-left)}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin:12px 0;overflow:hidden}
-  label{display:block;color:var(--muted);font-size:12px;margin:6px 0}
-  input,select,button{font:inherit}
-  input,select{width:100%;max-width:100%;min-width:0;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--btn);color:var(--btnText);min-height:44px}
-  .row{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
-  .col-3{grid-column:span 3}.col-4{grid-column:span 4}.col-6{grid-column:span 6}.col-12{grid-column:span 12}
-  @media (max-width:860px){.col-3,.col-4,.col-6{grid-column:span 12}}
-  .btn{padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:var(--btn);color:var(--btnText);cursor:pointer;min-height:44px}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:white}
-  .btn.danger{background:#2b0f12;border-color:#4a171b;color:#ffd7db}
-  .btn.small{padding:10px 12px;min-height:38px}
-  .toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  .toolbar.nowrap{flex-wrap:nowrap}
-  .right{text-align:right}
-  .muted{color:var(--muted);font-size:12px}
-  .total{font-size:22px;font-weight:700}
-  .table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px}
-  table{width:100%;border-collapse:collapse;min-width:640px}
-  th,td{padding:12px;border-bottom:1px solid var(--line);text-align:left}
-  thead th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-  .mode-switch{display:flex;gap:8px;margin:6px 0}
-  .pill{border:1px solid var(--line);background:var(--cardSoft);padding:8px 12px;border-radius:999px;cursor:pointer;color:var(--text)}
-  .pill.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-  .quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-  @media (max-width:860px){.quick-grid{grid-template-columns:repeat(2,1fr)}}
-  .calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
-  .day-head{color:var(--muted);text-align:center;font-size:12px}
-  .day{position:relative;height:84px;background:var(--cardSoft);border:1px solid var(--line);border-radius:16px;cursor:pointer}
-  .day.has{border-color:var(--accent);background:rgba(59,130,246,.12)}
-  .day.today{outline:2px solid var(--accent)}
-  .day .num{position:absolute;top:8px;left:0;right:0;text-align:center;font-weight:700}
-  .day .badge{position:absolute;left:50%;transform:translateX(-50%);bottom:10px;text-align:center;border:1px solid var(--line);background:var(--card);width:28px;height:28px;line-height:26px;border-radius:999px}
-  .detail{margin-top:10px}
+  .import-grid .file-name{ grid-column:auto; }
+}
+      
+  /* Поле + кнопка — строго в линию */
+  .field-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end}
+  .field{display:flex;flex-direction:column;gap:6px}
+
+  /* Календарь */
+  .cal-head{
+    display:grid;
+    grid-template-columns:auto 1fr auto; /* кнопка | заголовок | кнопка */
+    align-items:center;
+    gap:12px;
+    width:100%;
+  }
+  .cal-title {
+  font-weight: 800;
+  font-size: 16px;   /* всегда одинаковый размер */
+  text-align: center;
+  line-height: 1.2;
+}
+.cal-title .year {
+  display: block;
+  font-size: 16px;
+  font-weight: 500;
+  margin-top: 2px;
+}
+  .cal-head .btn:first-child{ justify-self:start; }
+  .cal-head .btn:last-child{  justify-self:end;  }
+  .cal-head .btn{ max-width:100%; }
+
+  .cal-dow{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin:6px 0 8px;color:var(--mut)}
+  .cal-dow span{text-align:center}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+  .cal-day{position:relative;border:1px solid var(--border);background:#0f1420;border-radius:18px;min-height:60px;padding:6px 6px 4px;text-align:center;color:var(--text);cursor:pointer}
+  .cal-day .num{display:block;font-weight:700;margin-bottom:2px}
+  .cal-day .badge{font-size:15px;line-height:1}
+  .cal-day.selected{outline:3px solid var(--accent);outline-offset:0}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;color:var(--mut)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+
+  /* Строка записи: 3 колонки — название | часы | действия */
+  .rowline{
+    display:grid;
+    grid-template-columns:1fr 100px auto;
+    gap:8px;
+    align-items:center;
+    padding:10px;
+    border:1px solid var(--border);
+    border-radius:12px;
+    margin:6px 0;
+  }
+  .rowline .hours{ text-align:right }
+  .rowline .actions{ justify-self:end }
+
+  .money{text-align:right}
+  .totals{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  .totals .pill{background:#0f1625}
+
+      /* Ряд двух нижних кнопок на всю ширину */
+.buttons-row{
+  grid-column: 1 / -1;  /* растянуть на обе колонки сетки импорта */
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.buttons-row .btn{
+  flex:1 1 180px;       /* одинаковая ширина; ужимаются на узком экране */
+}
+      
+  @media (max-width:560px){
+    .rowline{ grid-template-columns:1fr 70px auto }
+    .cal-day{min-height:56px}
+  }
+      @media (max-width:560px){
+  .import-grid{ grid-template-columns:1fr; grid-auto-rows:auto; }
+  .buttons-row .btn{ flex:1 1 140px; }
+}
+      /* ===== Modal (Архив) ===== */
+.modal[hidden]{ display:none }
+.modal{
+  position:fixed; inset:0; z-index:9999; display:grid; place-items:center;
+}
+.modal-backdrop{
+  position:absolute; inset:0; background:#0008; backdrop-filter:saturate(80%) blur(2px);
+}
+      /* Кнопка закрытия (крестик) */
+.modal-close{
+  position:absolute; top:10px; right:10px;
+  width:36px; height:36px; border-radius:999px;
+  border:1px solid var(--border); background:#111827; color:var(--text);
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  font-size:20px; line-height:1;
+      padding: 2px 0 0;
+}
+
+/* делаем карточку модалки скроллируемой, а не фон */
+.modal-card{
+  position:relative; z-index:1; width:min(720px, calc(100% - 24px));
+  background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px;
+overscroll-behavior: contain;
+  /* НОВОЕ: ограничение высоты и собственный скролл */
+  max-height:calc(100vh - 24px);
+  overflow:auto;
+  -webkit-overflow-scrolling: touch; /* iOS плавный скролл */
+}
+
+/* Блокируем прокрутку фона, когда открыта модалка */
+body.no-scroll{
+  overflow:hidden;
+  height:100vh; /* фикс для iOS */
+}
+.modal-head{ font-weight:800; font-size:18px; margin-bottom:12px }
+.modal-row{ display:grid; grid-template-columns:1fr 1fr auto; gap:12px; align-items:end }
+@media (max-width:560px){
+  .modal-row{ grid-template-columns:1fr 1fr; }
+  .modal-row .wide{ grid-column:1 / -1; }
+}
+.small-note{ color:var(--mut); margin-top:8px }
+
+/* компактная сетка внутри результата */
+.archive-totals{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px }
+.archive-totals .pill{ background:#0f1625 }
+.archive-list{ margin-top:10px }
+.archive-item{
+  display:grid; grid-template-columns:1fr 90px; gap:8px; align-items:center;
+  padding:8px; border:1px solid var(--border); border-radius:10px; margin:6px 0;
+}
+.archive-item .r{ text-align:right }
 </style>
 </head>
 <body>
-<header>
-  <h1>Подработки и зарплата</h1>
-  <div class="tabs">
-    <button class="tab active" data-tab="journal" type="button">Журнал</button>
-    <button class="tab" data-tab="settings" type="button">Настройки</button>
-    <button class="tab" data-tab="holidays" type="button">Праздники</button>
-    <button class="tab" data-tab="archive" type="button">Архив</button>
-    <button class="tab" data-tab="backup" type="button">Импорт</button>
+  <div class="wrap">
+    <div class="h1">Подработки и зарплата</div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="journal">Журнал</button>
+      <button class="tab" data-tab="settings">Настройки</button>
+      <button class="tab" data-tab="holidays">Праздники</button>
+      <button class="tab" data-tab="import">Импорт</button>
+    </div>
+
+    <!-- JOURNAL -->
+    <section id="journal" class="tabpage">
+      <div class="card">
+        <div class="field-row">
+          <div class="field">
+            <div class="mut">Дата</div>
+            <input id="dt" readonly>
+          </div>
+          <button class="btn" id="btnToday">Сегодня</button>
+        </div>
+
+        <div class="field-row mt-8">
+          <div class="field">
+            <div class="mut">Часы</div>
+            <input id="hours" inputmode="decimal" placeholder="напр., 3.5">
+          </div>
+          <button class="btn primary" id="btnAdd">Добавить</button>
+        </div>
+
+        <div class="section-title mt-8">Быстрые кнопки:</div>
+        <div class="quick" id="quick">
+          <button class="btn" data-qk="hrs-3.5">3.5 ч</button>
+          <button class="btn" data-qk="hrs-8">8 ч</button>
+          <button class="btn" data-qk="leave-hours">Отгул</button>
+          <button class="btn" data-qk="vacation">Отпуск</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cal-head">
+          <button class="btn" id="prevM">◀ Предыдущий</button>
+          <div class="cal-title" id="cal-title"></div>
+          <button class="btn" id="nextM">Следующий ▶</button>
+        </div>
+        <div class="cal-dow" id="cal-dow"></div>
+        <div class="cal-grid" id="cal-grid"></div>
+        <div class="legend">
+          <span>🛠️ — подработка</span>
+          <span>⛔ — отгул</span>
+          <span>🏖️ — отпуск</span>
+          <span>🎉 — праздничный</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div id="day-list"></div>
+        <div class="totals" id="totals"></div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="settings" class="tabpage" hidden>
+      <div class="card">
+        <div class="grid-3">
+          <div>
+            <div class="mut">Оклад, ₽ (на руки)</div>
+            <input id="salary" inputmode="numeric">
+          </div>
+          <div>
+            <div class="mut">Рабочих дней в текущем месяце (Пн–Пт минус праздники)</div>
+            <input id="workdays" inputmode="numeric" readonly>
+          </div>
+          <div>
+            <div class="mut">Часов в день</div>
+            <input id="hoursPerDay" inputmode="numeric" value="8">
+          </div>
+        </div>
+        <div class="mtt">
+          <div class="mut">Среднедневной (для отпуска), ₽ — необязательное поле</div>
+          <input id="avgDaily" inputmode="decimal" placeholder="если пусто — считаем автоматически за 12 мес.">
+        </div>
+        <div class="row mtt">
+  <button class="btn primary" id="saveSettings">Сохранить настройки</button>
+  <button class="btn" id="openArchive">Архив</button>
+</div>
+      </div>
+    </section>
+
+    <!-- HOLIDAYS -->
+    <section id="holidays" class="tabpage" hidden>
+      <div class="card">
+        <div class="mut">Отметьте праздничные дни кликом (сохраняются по месяцам).</div>
+        <div class="cal-head">
+          <button class="btn" id="hPrev">◀ Предыдущий</button>
+          <div class="cal-title" id="h-title"></div>
+          <button class="btn" id="hNext">Следующий ▶</button>
+        </div>
+        <div class="cal-dow" id="h-dow"></div>
+        <div class="cal-grid" id="h-grid"></div>
+      </div>
+    </section>
+
+        <!-- Modal: Архив -->
+<div id="archiveModal" class="modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+ <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="archiveTitle">
+  <button class="modal-close" data-close aria-label="Закрыть">×</button>
+  <div class="modal-head" id="archiveTitle">Архив выплат</div>
+  
+    <div class="modal-row">
+      <div>
+        <div class="mut">Месяц</div>
+        <select id="archMonth"></select>
+      </div>
+      <div>
+        <div class="mut">Год</div>
+        <input id="archYear" inputmode="numeric" />
+      </div>
+      <div>
+        <button class="btn primary wide" id="archShow">Показать</button>
+      </div>
+    </div>
+
+    <div class="small-note">История строится по вашим записям (подработки, отгулы, отпуск) и настройкам зарплаты/часов.</div>
+
+    <div id="archResult"></div>
+
+    <div class="row mtt">
+      <button class="btn" data-close>Закрыть</button>
+    </div>
   </div>
-</header>
-
-<main>
-  <!-- ЖУРНАЛ -->
-  <section class="card" data-pane="journal">
-    <div class="mode-switch">
-      <button class="pill active" data-mode="calendar" type="button">Календарь</button>
-      <button class="pill" data-mode="list" type="button">Список</button>
-    </div>
-
-    <div class="row">
-      <div class="col-4">
-        <label>Дата</label>
-        <div class="toolbar" style="gap:8px">
-          <input type="date" id="shiftDate" style="flex:1;min-width:0">
-          <button class="btn small" id="todayBtn" type="button">Сегодня</button>
-        </div>
+</div>
+    <!-- IMPORT -->
+<section id="import" class="tabpage" hidden>
+  <div class="card">
+    <div class="import-grid">
+      <div class="file-wrap">
+        <label for="file" class="btn">Выбрать файл</label>
+        <span class="file-name" id="fileName" aria-live="polite">файл не выбран</span>
+        <input id="file" type="file" accept="application/json" class="file-input">
       </div>
-      <div class="col-4">
-        <label>Тип (определяется автоматически)</label>
-        <select id="shiftType" disabled>
-          <option>(определить автоматически)</option>
-        </select>
-      </div>
-      <div class="col-4">
-        <label>Часы</label>
-        <input type="number" id="shiftHours" min="0.25" step="0.25" placeholder="напр., 3.5">
+
+      <div class="buttons-row">
+        <button class="btn" id="btnExport">Экспорт JSON</button>
+        <button class="btn primary" id="btnImport">Импорт</button>
       </div>
     </div>
 
-    <div class="toolbar" style="margin-top:10px">
-      <button class="btn primary" id="addShift" type="button">Добавить</button>
-      <div class="muted" id="dayInfo"></div>
-    </div>
-
-    <div class="card" style="margin-top:8px">
-      <div class="muted" style="margin-bottom:8px">Быстрые кнопки:</div>
-      <div class="quick-grid">
-        <button class="btn" data-quick="hrs-3.5" type="button">3.5 ч</button>
-        <button class="btn" data-quick="hrs-8" type="button">8 ч</button>
-        <button class="btn" data-quick="dayoff-hrs" type="button">Отгул</button>
-        <button class="btn" data-quick="vac" type="button">Отпуск</button>
-      </div>
-    </div>
-
-    <div class="card" id="calendarCard">
-      <div class="total" id="monthTitle" style="text-align:center;margin-bottom:8px">—</div>
-      <div class="toolbar nowrap" style="justify-content:space-between;margin-bottom:10px">
-        <button class="btn small" id="prevMonth" type="button">◀︎ Предыдущий</button>
-        <button class="btn small" id="nextMonth" type="button">Следующий ▶︎</button>
-      </div>
-      <div class="calendar" id="calendarGrid"></div>
-      <div class="detail" id="dayDetail"></div>
-    </div>
-
-    <div class="card" id="listCard" style="display:none">
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Дата</th><th>День</th><th>Тип</th>
-              <th class="right">Часы</th><th class="right">₽/ч</th><th class="right">Оплата</th><th class="right">Действия</th>
-            </tr>
-          </thead>
-          <tbody id="rows"></tbody>
-          <tfoot><tr><td colspan="5" class="right">Итого подработки:</td><td class="right" id="totalOvertime">0</td><td></td></tr></tfoot>
-        </table>
-      </div>
-    </div>
-
-    <div class="row">
-      <div class="col-4">
-        <div>База (пропорц.): <span id="baseMonthlyOut">—</span></div>
-        <div class="muted">Почасовая: <span id="hourlyOut">—</span> ₽/ч</div>
-      </div>
-      <div class="col-4">
-        <div>Подработки: <span id="overtimeOut">—</span></div>
-        <div class="muted">Часы подработок: <span id="otHoursOut">—</span> ч</div>
-      </div>
-      <div class="col-4">
-        <div>Итого к выплате:</div>
-        <div class="total" id="grandTotal">—</div>
-        <div class="muted" id="vacInfo"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- НАСТРОЙКИ -->
-  <section class="card" data-pane="settings" style="display:none">
-    <h3>Настройки расчёта</h3>
-    <div class="row">
-      <div class="col-3">
-        <label>Текущий месяц</label>
-        <input type="month" id="monthFilter">
-      </div>
-      <div class="col-3">
-        <label>Оклад (на руки), ₽</label>
-        <input type="number" id="baseMonthly" min="0" step="1" placeholder="введите сумму">
-      </div>
-      <div class="col-3">
-        <label>Рабочих дней (авто, Пн–Пт)</label>
-        <input id="autoWorkdays" disabled>
-      </div>
-      <div class="col-3">
-        <label>Часов в дне</label>
-        <input type="number" id="hoursPerDay" min="1" step="1" value="8">
-      </div>
-    </div>
-    <div class="row">
-      <div class="col-6">
-        <label>Тип отпуска</label>
-        <select id="leaveMode">
-          <option value="calendar">Календарный (все дни)</option>
-          <option value="production">Производственный (только будни)</option>
-        </select>
-      </div>
-      <div class="col-6">
-        <label>Тема</label>
-        <select id="themeSelect"><option value="dark">Тёмная</option><option value="light">Светлая</option></select>
-      </div>
-    </div>
-    <div class="row">
-      <div class="col-3"><label>Будни — первые 2 ч</label><input type="number" id="weekdayFirstMult" step="0.1" min="1" value="1.5"></div>
-      <div class="col-3"><label>Будни — дальше</label><input type="number" id="weekdayNextMult" step="0.1" min="1" value="2"></div>
-      <div class="col-3"><label>Суббота</label><input type="number" id="satMult" step="0.1" min="1" value="1.5"></div>
-      <div class="col-3"><label>Воскресенье</label><input type="number" id="sunMult" step="0.1" min="1" value="2"></div>
-    </div>
-    <div class="row">
-      <div class="col-3"><label>Праздник</label><input type="number" id="holidayMult" step="0.1" min="1" value="2"></div>
-      <div class="col-9">
-        <label>Обновление приложения</label>
-        <div class="toolbar">
-          <button class="btn" id="updateAppBtn" type="button">Обновить приложение</button>
-          <div class="muted" id="updateStatus"></div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ПРАЗДНИКИ -->
-  <section class="card" data-pane="holidays" style="display:none">
-    <h3>Праздничные дни месяца</h3>
-    <div class="muted">Текущий месяц: <b id="monthLabel"></b>. Нажмите на день, чтобы отметить/снять праздник.</div>
-    <div id="holidayGrid" style="margin-top:10px"></div>
-  </section>
-
-  <!-- АРХИВ -->
-  <section class="card" data-pane="archive" style="display:none">
-    <h3 style="margin:0">Архив по месяцам</h3>
-    <div id="archiveList" style="margin-top:10px"></div>
-  </section>
-
-  <!-- ИМПОРТ -->
-  <section class="card" data-pane="backup" style="display:none">
-    <h3>Импорт / Экспорт</h3>
-    <div class="toolbar">
-      <button class="btn" id="exportJSON" type="button">Экспорт JSON</button>
-      <input id="importFile" type="file" accept="application/json" style="max-width:320px">
-      <button class="btn danger" id="clearAll" type="button">Очистить всё</button>
-    </div>
-  </section>
-</main>
+    <div class="mut mtt">Экспорт включает записи, праздники и базовые настройки.</div>
+  </div>
+</section>
 
 <script>
-(function(){
-  const SKEY='paycalc_v4_1_autoavg';
-  const $ = s=>document.querySelector(s);
-  const $$ = s=>document.querySelectorAll(s);
-  const pad = n => String(n).padStart(2,'0');
-  const mkISO = (y,m,d)=>`${y}-${pad(m)}-${pad(d)}`;
-  const todayISO = ()=>{const t=new Date();return mkISO(t.getFullYear(),t.getMonth()+1,t.getDate());};
-  const isoMonth = d => (d||'').slice(0,7);
-  const addMonth = (ym,delta)=>{let[y,m]=ym.split('-').map(Number);m+=delta;while(m<1){m+=12;y--}while(m>12){m-=12;y++}return `${y}-${pad(m)}`};
-  const dayShort = d => new Date(d+'T00:00:00').toLocaleDateString('ru-RU',{weekday:'short'});
-  const money = n => (Math.round(n)).toLocaleString('ru-RU');
+/* ================== STATE & STORAGE ================== */
+function ymd(d){return d.toISOString().slice(0,10)}
+function pad2(n){return String(n).padStart(2,'0')}
+function ymStr(y,m){return `${y}-${pad2(m+1)}`}
+function makeId(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36)}
+const LS_KEYS = { entries:'entries', holidays:'holidays', settings:'settings' };
+function loadEntries(){try{return JSON.parse(localStorage.getItem(LS_KEYS.entries)||'[]')}catch(e){return[]}}
+function saveEntries(a){localStorage.setItem(LS_KEYS.entries,JSON.stringify(a))}
+function loadHolidays(){try{return JSON.parse(localStorage.getItem(LS_KEYS.holidays)||'{}')}catch(e){return{}}}
+function saveHolidays(m){localStorage.setItem(LS_KEYS.holidays,JSON.stringify(m))}
+function loadSettings(){try{return JSON.parse(localStorage.getItem(LS_KEYS.settings)||'{}')}catch(e){return{}}}
+function saveSettingsObj(o){localStorage.setItem(LS_KEYS.settings,JSON.stringify(o))}
 
-  const persisted = (()=>{try{return JSON.parse(localStorage.getItem(SKEY))}catch(e){return null}})();
-  const state = persisted || {
-    theme:'dark',
-    month: new Date().toISOString().slice(0,7),
-    settings:{ baseMonthly:0, hoursPerDay:8, leaveMode:'calendar', weekdayFirstMult:1.5, weekdayNextMult:2, satMult:1.5, sunMult:2, holidayMult:2 },
-    holidaysByMonth:{},
-    statusesByMonth:{},
-    shifts:[]
+/* default settings */
+const defaultSettings = { salary:null, workdays:22, hoursPerDay:8, avgDaily:null };
+const settings = Object.assign({}, defaultSettings, loadSettings());
+
+/* selected date / month */
+const today = new Date();
+const state = {
+  year: today.getFullYear(),
+  month: today.getMonth(),
+  get ym(){return ymStr(this.year,this.month)},
+  selectedDate: ymd(today),
+  holidays: loadHolidays()
+};
+
+/* === util === */
+function daysInMonth(y,m){ return new Date(y,m+1,0).getDate() }
+function isWeekday(y,m,d){ const dow=new Date(y,m,d).getDay(); return dow>=1 && dow<=5; }
+function computeWorkdays(y,m){
+  const days=daysInMonth(y,m); let wd=0;
+  for(let d=1; d<=days; d++) if(isWeekday(y,m,d)) wd++;
+  const hol=(state.holidays[ymStr(y,m)]||[]);
+  const weekdayHols=hol.filter(d=>isWeekday(y,m,d)).length;
+  return Math.max(0, wd - weekdayHols);
+}
+function updateWorkdaysForCurrentMonth(){
+  const wd = computeWorkdays(state.year, state.month);
+  settings.workdays = wd; saveSettingsObj(settings);
+  const el=document.getElementById('workdays'); if(el) el.value = wd;
+}
+
+/* ================== TABS ================== */
+const tabBtns=[...document.querySelectorAll('.tab')];
+const tabPages=[...document.querySelectorAll('.tabpage')];
+tabBtns.forEach(b=>b.onclick=()=>{
+  tabBtns.forEach(x=>x.classList.remove('active'));
+  tabPages.forEach(s=>s.hidden=true);
+  b.classList.add('active');
+  document.getElementById(b.dataset.tab).hidden=false;
+  if(b.dataset.tab==='holidays'){renderHolidaysCalendar(hYear,hMonth)}
+  if(b.dataset.tab==='settings'){updateWorkdaysForCurrentMonth()}
+        // если открыт архив — закрываем
+  if(!modal.hidden) closeArchive();
+});
+
+function setTodayUi(){
+  document.getElementById('dt').value = new Date(state.selectedDate)
+    .toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'});
+}
+document.getElementById('btnToday').onclick=()=>{
+  const t = new Date();
+  state.year=t.getFullYear(); state.month=t.getMonth(); state.selectedDate=ymd(t);
+  setTodayUi(); renderCalendar(state.year,state.month); renderDayDetails(state.selectedDate);
+  updateWorkdaysForCurrentMonth();
+};
+
+/* SETTINGS */
+document.getElementById('salary').value = settings.salary ?? '';
+document.getElementById('hoursPerDay').value = settings.hoursPerDay;
+document.getElementById('avgDaily').value = settings.avgDaily??'';
+updateWorkdaysForCurrentMonth();
+document.getElementById('saveSettings').onclick = () => {
+  const salaryStr = document.getElementById('salary').value.trim();
+  settings.salary = salaryStr === '' ? null : Number(salaryStr);
+
+  settings.hoursPerDay = Number(document.getElementById('hoursPerDay').value || 0);
+
+  const a = document.getElementById('avgDaily').value.trim();
+  settings.avgDaily = a === '' ? null : (Number(a.replace(',','.')) || null);
+
+  saveSettingsObj(settings);
+  renderDayDetails(state.selectedDate);
+  alert('Сохранено.');
+};
+
+/* ADD / UPDATE / DELETE */
+function addOrUpdateWork(dateISO, hoursVal){
+  const list = loadEntries();
+  const idx  = list.findIndex(e => e.date === dateISO && e.kind === 'work');
+  const rec  = {
+    id:   idx > -1 ? list[idx].id : makeId(),
+    date: dateISO,
+    kind: 'work',
+    hours: Number(hoursVal) || 0
   };
+  if (idx > -1) list[idx] = rec; else list.push(rec);
+  saveEntries(list);
+}
 
-  function save(){ localStorage.setItem(SKEY, JSON.stringify(state)); }
-  function isWeekdayISO(iso){ const dow = new Date(iso+'T00:00:00').getDay(); return dow>=1 && dow<=5; }
-  function computeWorkdays(ym){
-    const [y,m]=ym.split('-').map(Number); const days=new Date(y,m,0).getDate();
-    let weekdays=0; for(let d=1; d<=days; d++){ const dow=new Date(y,m-1,d).getDay(); if(dow>=1 && dow<=5) weekdays++; }
-    const hol=new Set(state.holidaysByMonth[ym]||[]);
-    let weekdayHolidays=0; for(const iso of hol){ if(isWeekdayISO(iso)) weekdayHolidays++; }
-    return Math.max(0, weekdays - weekdayHolidays);
-  }
-  function cryptoRandom(){ try{ return Array.from(crypto.getRandomValues(new Uint8Array(8))).map(b=>b.toString(16).padStart(2,'0')).join(''); }catch(_){ return Math.random().toString(36).slice(2,10); } }
-  function isHoliday(dateISO){ const set=new Set(state.holidaysByMonth[isoMonth(dateISO)]||[]); return set.has(dateISO); }
-  function getStatuses(ym){ const s=state.statusesByMonth[ym]||{off:[],vac:[]}; state.statusesByMonth[ym]=s; return s; }
-
-  function hourly(ym){
-    const s=state.settings; const wd=computeWorkdays(ym);
-    if((s.baseMonthly||0)<=0 || wd<=0 || (s.hoursPerDay||0)<=0) return 0;
-    return s.baseMonthly / (wd * s.hoursPerDay);
-  }
-  function payForShift(shift, hr){
-    const h=shift.hours, s=state.settings;
-    if(shift.type==='holiday') return h*s.holidayMult*hr;
-    if(shift.type==='weekday'){ const first=Math.min(h,2)*s.weekdayFirstMult*hr; const next=Math.max(0,h-2)*s.weekdayNextMult*hr; return first+next; }
-    if(shift.type==='saturday') return h*s.satMult*hr;
-    if(shift.type==='sunday') return h*s.sunMult*hr;
-    return 0; // dayoff и любые прочие — неоплачиваемые
-  }
-
-  function lastMonths(ym, n){
-    let res=[]; let cur=ym;
-    for(let i=0;i<n;i++){ cur = addMonth(cur,-1); res.push(cur); }
-    return res;
-  }
-
-  // --- сырой расчёт месяца (без отпускных), с учётом "Отгула" ---
-  function monthlyPartsRaw(ym){
-    const hr = hourly(ym);
-    const rows = state.shifts.filter(s=>isoMonth(s.date)===ym);
-
-    const overtime = rows
-      .filter(s=>s.type!=='dayoff')
-      .reduce((a,s)=>a+payForShift(s,hr),0);
-
-    const otHours = rows
-      .filter(s=>s.type!=='dayoff')
-      .reduce((a,s)=>a+s.hours,0);
-
-    const wd = computeWorkdays(ym);
-    const st = getStatuses(ym);
-    const offWeekdays = (st.off||[]).filter(isWeekdayISO).length;
-    const vacWeekdays = (st.vac||[]).filter(isWeekdayISO).length;
-    const base = state.settings.baseMonthly||0;
-
-    let baseEff = (wd>0) ? base * ((wd - offWeekdays - vacWeekdays) / wd) : 0;
-
-    // вычитаем «Отгул» по почасовой ставке
-    const dayoffHours = rows.filter(s=>s.type==='dayoff').reduce((a,s)=>a+Number(s.hours||0),0);
-    baseEff = Math.max(0, baseEff - dayoffHours * hr);
-
-    const vacDays = (st.vac||[]).length;
-    return { baseEff, overtime, otHours, vacDays, vacWeekdays };
-  }
-
-  function averageDaily(ym){
-    const months = lastMonths(ym, 12);
-    let sum = 0;
-    const base = state.settings.baseMonthly||0;
-    months.forEach(m=>{
-      const hasData = (state.shifts.some(s=>isoMonth(s.date)===m) ||
-                       (state.statusesByMonth[m] && ((state.statusesByMonth[m].off||[]).length || (state.statusesByMonth[m].vac||[]).length)) ||
-                       (state.holidaysByMonth[m] && (state.holidaysByMonth[m].length)));
-      if(hasData){
-        const p = monthlyPartsRaw(m);
-        sum += (p.baseEff + p.overtime); // без отпускных, чтобы не зациклиться
-      }else{
-        sum += base;
-      }
-    });
-    return sum / (29.3 * 12);
-  }
-
-  function monthlyTotals(ym){
-    const { baseEff, overtime, otHours, vacDays, vacWeekdays } = monthlyPartsRaw(ym);
-    const avg = averageDaily(ym);
-    const daysForPay = (state.settings.leaveMode==='production') ? vacWeekdays : vacDays;
-    const vacPay = avg * daysForPay;
-    return {baseEff, overtime, vacPay, otHours, sum: baseEff + overtime + vacPay};
-  }
-
-  function autoType(dateISO){
-    if(isHoliday(dateISO)) return 'holiday';
-    const dow=new Date(dateISO+'T00:00:00').getDay();
-    if(dow===0) return 'sunday';
-    if(dow===6) return 'saturday';
-    return 'weekday';
-  }
-
-  const ui = {
-    tabs: $$('.tab'), panes: $$('section.card'),
-    shiftDate: $('#shiftDate'), todayBtn: $('#todayBtn'), shiftType: $('#shiftType'), shiftHours: $('#shiftHours'), addShift: $('#addShift'), dayInfo: $('#dayInfo'),
-    monthTitle: $('#monthTitle'), prevMonth: $('#prevMonth'), nextMonth: $('#nextMonth'), cal: $('#calendarGrid'), detail: $('#dayDetail'),
-    modePills: $$('.pill'), rows: $('#rows'), totalOvertime: $('#totalOvertime'),
-    baseMonthlyOut: $('#baseMonthlyOut'), hourlyOut: $('#hourlyOut'), overtimeOut: $('#overtimeOut'), otHoursOut: $('#otHoursOut'), grandTotal: $('#grandTotal'), vacInfo: $('#vacInfo'),
-    monthFilter: $('#monthFilter'), baseMonthly: $('#baseMonthly'), autoWorkdays: $('#autoWorkdays'), hoursPerDay: $('#hoursPerDay'),
-    weekdayFirstMult: $('#weekdayFirstMult'), weekdayNextMult: $('#weekdayNextMult'), satMult: $('#satMult'), sunMult: $('#sunMult'), holidayMult: $('#holidayMult'),
-    themeSelect: $('#themeSelect'), updateBtn: $('#updateAppBtn'), updateStatus: $('#updateStatus'),
-    holidayGrid: $('#holidayGrid'), monthLabel: $('#monthLabel'),
-    archiveList: $('#archiveList'),
-    exportJSON: $('#exportJSON'), importFile: $('#importFile'), clearAll: $('#clearAll')
-  };
-
-  document.documentElement.setAttribute('data-theme', state.theme);
-  ui.themeSelect.value = state.theme;
-  ui.shiftDate.value = todayISO();
-  ui.monthFilter.value = state.month;
-  Object.entries(state.settings).forEach(([k,v])=>{ if(ui[k]) ui[k].value=v; });
-  if(!state.settings.leaveMode){ state.settings.leaveMode='calendar'; }
-  const lmEl=document.getElementById('leaveMode'); if(lmEl){ lmEl.value=state.settings.leaveMode; }
-  ui.autoWorkdays.value = computeWorkdays(state.month);
-
-  ui.tabs.forEach(b=>b.addEventListener('click', ()=>{
-    ui.tabs.forEach(x=>x.classList.remove('active')); b.classList.add('active');
-    const tab=b.dataset.tab; ui.panes.forEach(p=>p.style.display=(p.dataset.pane===tab?'block':'none'));
-    if(tab==='holidays'){ buildHolidayGrid(state.month); }
-    if(tab==='archive'){ renderArchive(); }
-    if(tab==='journal'){ renderAll(); }
-  }));
-
-  ui.modePills.forEach(p=>p.addEventListener('click', ()=>{
-    ui.modePills.forEach(x=>x.classList.remove('active')); p.classList.add('active');
-    const mode=p.dataset.mode;
-    document.getElementById('calendarCard').style.display = (mode==='calendar'?'block':'none');
-    document.getElementById('listCard').style.display = (mode==='list'?'block':'none');
-  }));
-
-  ui.todayBtn.addEventListener('click', ()=>{ ui.shiftDate.value = todayISO(); });
-  ui.addShift.addEventListener('click', onAddShift);
-  ui.shiftHours.addEventListener('keydown', e=>{ if(e.key==='Enter') onAddShift(); });
-
-  document.querySelectorAll('.quick-grid .btn').forEach(btn=>btn.addEventListener('click', ()=>{
-    const code=btn.dataset.quick, date=ui.shiftDate.value||todayISO();
-    if(code==='hrs-3.5' || code==='hrs-8'){
-      const hours = code==='hrs-3.5' ? 3.5 : 8;
-      const type = autoType(date);
-      const st=getStatuses(isoMonth(date)); st.off=st.off.filter(x=>x!==date); st.vac=st.vac.filter(x=>x!==date);
-      state.shifts.push({id:cryptoRandom(), date, type, hours}); save(); renderAll(); return;
-    }
-    if(code==='dayoff-hrs'){
-      const v=prompt('Сколько часов вычесть (отгул)?','2');
-      const num=v? parseFloat(String(v).replace(',','.')):0;
-      if(num>0){ const st=getStatuses(isoMonth(date)); st.off=st.off.filter(x=>x!==date); st.vac=st.vac.filter(x=>x!==date); state.shifts.push({id:cryptoRandom(), date, type:'dayoff', hours:num}); save(); renderAll(); }
-      return;
-    }
-    if(code==='vac'){
-      const st=getStatuses(isoMonth(date)); const set=new Set(st.vac);
-      if(set.has(date)){ st.vac = st.vac.filter(x=>x!==date); } else { set.add(date); st.vac = Array.from(set).sort(); st.off=st.off.filter(x=>x!==date); }
-      state.shifts = state.shifts.filter(s=>s.date!==date);
-      save(); renderAll(); return;
-    }
-  }));
-
-  ui.prevMonth.addEventListener('click', ()=>{ state.month=addMonth(state.month,-1); onMonthChanged(); });
-  ui.nextMonth.addEventListener('click', ()=>{ state.month=addMonth(state.month, 1); onMonthChanged(); });
-  ui.monthFilter.addEventListener('change', e=>{ state.month=e.target.value; onMonthChanged(); });
-
-  ['baseMonthly','hoursPerDay','weekdayFirstMult','weekdayNextMult','satMult','sunMult','holidayMult'].forEach(id=>{
-    if(ui[id]) ui[id].addEventListener('change', e=>{ state.settings[id]=parseFloat(e.target.value)||0; save(); renderAll(); });
+function addOffHours(dateISO, hoursVal){
+  const list = loadEntries();
+  list.push({ id: makeId(), date: dateISO, kind: 'offHours', hours: Number(hoursVal) || 0 });
+  saveEntries(list);
+}
+function toggleVacation(dateISO){
+  const list=loadEntries();
+  const idx=list.findIndex(e=>e.date===dateISO && e.kind==='vacation');
+  if(idx>-1) list.splice(idx,1);
+  else list.push({ id:makeId(), date:dateISO, kind:'vacation', hours:0 });
+  saveEntries(list);
+}
+function deleteEntryById(id){
+  const list=loadEntries();
+  const i=list.findIndex(e=>e.id===id);
+  if(i>-1){ list.splice(i,1); saveEntries(list) }
+}
+function bindDeleteButtons(){
+  document.querySelectorAll('[data-del-id]').forEach(b=>{
+    b.onclick=()=>{ deleteEntryById(b.dataset.delId); renderDayDetails(state.selectedDate); renderCalendar(state.year,state.month); };
   });
-  ui.themeSelect.addEventListener('change', e=>{ state.theme=e.target.value; document.documentElement.setAttribute('data-theme', state.theme); save(); });
+}
 
-  ui.exportJSON.addEventListener('click', ()=>{
-    const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
-    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='paycalc_data.json'; a.click();
+/* inputs */
+document.getElementById('btnAdd').onclick=()=>{
+  const h = Number(document.getElementById('hours').value.replace(',','.'))||0;
+  if(h<=0) return;
+  addOrUpdateWork(state.selectedDate,h);
+  document.getElementById('hours').value='';
+  renderDayDetails(state.selectedDate); renderCalendar(state.year,state.month);
+};
+document.getElementById('quick').onclick=(ev)=>{
+  const b=ev.target.closest('button[data-qk]'); if(!b) return;
+  const code=b.dataset.qk;
+  if(code==='hrs-3.5') addOrUpdateWork(state.selectedDate,3.5);
+  if(code==='hrs-8') addOrUpdateWork(state.selectedDate,8);
+  if(code==='leave-hours'){
+    const n = Number((prompt('Отгул (часы):','2')||'').replace(',','.'))||0;
+    if(n>0) addOffHours(state.selectedDate,n);
+  }
+  if(code==='vacation') toggleVacation(state.selectedDate);
+  renderDayDetails(state.selectedDate); renderCalendar(state.year,state.month);
+};
+
+/* CALENDAR */
+function renderCalendar(y,m){
+  const titleEl = document.getElementById('cal-title');
+const d = new Date(y,m,1);
+const month = d.toLocaleDateString('ru-RU',{month:'long'});
+const year  = d.getFullYear();
+titleEl.innerHTML = `${month}<span class="year">${year} г.</span>`;
+
+  document.getElementById('cal-dow').innerHTML =
+    ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(d=>`<span>${d}</span>`).join('');
+
+  const grid=document.getElementById('cal-grid'); grid.innerHTML='';
+  const first=new Date(y,m,1);
+  const startCol=(first.getDay()+6)%7;
+  const n=daysInMonth(y,m);
+  const entries=loadEntries();
+  const hol = state.holidays[ymStr(y,m)] || [];
+
+  for(let i=0;i<startCol;i++){
+    const d=document.createElement('div'); d.className='cal-day'; d.style.visibility='hidden'; grid.appendChild(d);
+  }
+  for(let day=1; day<=n; day++){
+    const dateISO=`${y}-${pad2(m+1)}-${pad2(day)}`;
+    const hasWork=entries.some(e=>e.date===dateISO && e.kind==='work');
+    const hasLeave=entries.some(e=>e.date===dateISO && e.kind==='offHours');
+    const hasVac=entries.some(e=>e.date===dateISO && e.kind==='vacation');
+    const isHol=hol.includes(day);
+    const badge=(hasWork?'🛠️':'')+(hasLeave?' ⛔':'')+(hasVac?' 🏖️':'')+(isHol?' 🎉':'');
+
+    const btn=document.createElement('button');
+    btn.className='cal-day';
+    if(dateISO===state.selectedDate) btn.classList.add('selected');
+    btn.innerHTML=`<span class="num">${day}</span><div class="badge">${badge}</div>`;
+    btn.onclick=()=>{ state.selectedDate=dateISO; setTodayUi(); renderCalendar(y,m); renderDayDetails(dateISO); };
+    grid.appendChild(btn);
+  }
+}
+function setSelectedDateToMonth(y, m){
+  const prevDay = Number(state.selectedDate.slice(8,10)) || 1;
+  const dim = daysInMonth(y, m);
+  const day = Math.min(prevDay, dim);
+  state.selectedDate = `${y}-${pad2(m+1)}-${pad2(day)}`;
+  setTodayUi();
+}
+      
+document.getElementById('prevM').onclick = () => {
+  state.month--;
+  if (state.month < 0) { state.month = 11; state.year--; }
+  setSelectedDateToMonth(state.year, state.month);
+  renderCalendar(state.year, state.month);
+  renderDayDetails(state.selectedDate);
+  updateWorkdaysForCurrentMonth();
+};
+
+document.getElementById('nextM').onclick = () => {
+  state.month++;
+  if (state.month > 11) { state.month = 0; state.year++; }
+  setSelectedDateToMonth(state.year, state.month);
+  renderCalendar(state.year, state.month);
+  renderDayDetails(state.selectedDate);
+  updateWorkdaysForCurrentMonth();
+};
+/* TOTALS + LIST */
+      /* ===== ARCHIVE: helpers for arbitrary month ===== */
+function hourRateFor(y,m){
+  const wd  = Math.max(1, computeWorkdays(y,m));
+  const hpd = Math.max(1, Number(settings.hoursPerDay||8));
+  const sal = Number(settings.salary||0);
+  return (wd*hpd) > 0 ? sal/(wd*hpd) : 0;
+}
+
+// среднедневной для конкретного месяца (скользящие 12 мес «до» выбранного)
+function autoAverageDailyFor(y,m){
+  const anchor = new Date(y, m, 1);
+  let sum = 0;
+  for(let i=1;i<=12;i++){
+    const d = new Date(anchor); d.setMonth(anchor.getMonth()-i);
+    sum += monthAccruals(d.getFullYear(), d.getMonth());
+  }
+  return sum / (29.3 * 12);
+}
+function avgDailyFor(y,m){
+  if(settings.avgDaily!=null) return Number(settings.avgDaily)||0;
+  return autoAverageDailyFor(y,m);
+}
+
+// расчёт итогов по выбранному месяцу
+function totalsForMonth(y,m){
+  const ym = ymStr(y,m);
+  const list = loadEntries().filter(e => e.date.slice(0,7) === ym);
+
+  let workH = 0, offH = 0;
+  const vacDays = [];
+
+  list.forEach(e=>{
+    if(e.kind === 'work') workH += Number(e.hours||0);
+    else if(e.kind === 'offHours') offH += Number(e.hours||0);
+    else if(e.kind === 'vacation') vacDays.push(Number(e.date.slice(8,10)));
   });
-  ui.importFile.addEventListener('change', async e=>{
-    const f=e.target.files[0]; if(!f) return;
+
+  const hol = state.holidays[ym] || [];
+  const rate = hourRateFor(y,m);
+  const dayFromSalary = Number(settings.salary||0) / Math.max(1, computeWorkdays(y,m));
+
+  const vacPaidDays = vacDays.filter(d => !hol.includes(d)).length;
+  const vacWeekdays = vacDays.filter(d => isWeekday(y,m,d)).length;
+
+  const payWork = workH * rate;
+  const payVac  = avgDailyFor(y,m) * vacPaidDays;
+  const base    = Math.max(0, Number(settings.salary||0) - offH*rate - vacWeekdays*dayFromSalary);
+  const total   = base + payWork + payVac;
+
+  return { workH, offH, vacPaidDays, vacWeekdays, rate, payWork, payVac, base, total };
+}
+
+// генерация списочка по дням
+function monthEntriesList(y,m){
+  const ym = ymStr(y,m);
+  const list = loadEntries().filter(e => e.date.slice(0,7) === ym)
+                 .sort((a,b)=>a.date.localeCompare(b.date));
+  const byDay = new Map();
+  list.forEach(e=>{
+    const d = Number(e.date.slice(8,10));
+    if(!byDay.has(d)) byDay.set(d, []);
+    byDay.get(d).push(e);
+  });
+  return [...byDay.entries()].map(([d,items])=>{
+    const label = `${String(d).padStart(2,'0')}.${String(m+1).padStart(2,'0')}.${y}`;
+    const text = items.map(e=>{
+      const icon = e.kind==='work'?'🛠️':(e.kind==='offHours'?'⛔':'🏖️');
+      const hrs  = e.kind==='vacation' ? '' : ` — ${Number(e.hours||0)} ч`;
+      const title= e.kind==='work'?'Подработка':(e.kind==='offHours'?'Отгул':'Отпуск');
+      return `${icon} ${title}${hrs}`;
+    }).join(', ');
+    return { label, text };
+  });
+}
+function currentHourRate(){
+  const wd = Math.max(1, Number(settings.workdays||22));
+  const hpd= Math.max(1, Number(settings.hoursPerDay||8));
+  const sal= Number(settings.salary||0);
+  return wd*hpd>0 ? sal/(wd*hpd) : 0;
+}
+function monthAccruals(y,m){
+  const ym = ymStr(y,m);
+  const list = loadEntries().filter(e=>e.date.slice(0,7)===ym);
+  const rate = currentHourRate();
+  let workH = 0;
+  list.forEach(e=>{ if(e.kind==='work') workH += Number(e.hours||0); });
+  const overtimePay = workH * rate;
+  return Number(settings.salary||0) + overtimePay;
+}
+function autoAverageDaily(){
+  const anchor = new Date(state.year, state.month, 1);
+  let sum = 0;
+  for(let i=1;i<=12;i++){
+    const d = new Date(anchor); d.setMonth(anchor.getMonth()-i);
+    sum += monthAccruals(d.getFullYear(), d.getMonth());
+  }
+  return sum / (29.3 * 12);
+}
+function avgDaily(){
+  if(settings.avgDaily!=null) return Number(settings.avgDaily)||0;
+  return autoAverageDaily();
+}
+function calcTotals(dateISO){
+  const y = Number(dateISO.slice(0,4));
+  const m = Number(dateISO.slice(5,7)) - 1;
+  const ym = dateISO.slice(0,7);
+
+  const list = loadEntries().filter(e => e.date.slice(0,7) === ym);
+
+  let workH = 0, offH = 0;
+  const vacDays = [];
+
+  list.forEach(e=>{
+    if(e.kind === 'work') workH += Number(e.hours||0);
+    else if(e.kind === 'offHours') offH += Number(e.hours||0);
+    else if(e.kind === 'vacation') vacDays.push(Number(e.date.slice(8,10)));
+  });
+
+  const rate = currentHourRate();
+  const dayFromSalary = Number(settings.salary||0) / Math.max(1, Number(settings.workdays||22));
+  const hol = state.holidays[ymStr(y,m)] || [];
+
+  const vacPaidDays = vacDays.filter(d => !hol.includes(d)).length;
+  const vacWeekdays = vacDays.filter(d => isWeekday(y,m,d)).length;
+
+  const payWork = workH * rate;
+  const payVac  = avgDaily() * vacPaidDays;
+
+  const base = Math.max(0, Number(settings.salary||0) - offH*rate - vacWeekdays*dayFromSalary);
+  const total = base + payWork + payVac;
+  return { workH, offH, vacPaidDays, vacWeekdays, rate, payWork, payVac, base, total };
+}
+function renderDayDetails(dateISO){
+  const box=document.getElementById('day-list');
+  const list=loadEntries().filter(e=>e.date===dateISO);
+  const label=new Date(dateISO).toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+  let html=`<h3 style="margin:6px 0 10px">${label}</h3>`;
+  if(list.length===0){ html+=`<div class="mut">Записей нет.</div>`; }
+  else{
+    html+=list.map(e=>{
+      const icon = e.kind==='work'?'🛠️':(e.kind==='offHours'?'⛔':'🏖️');
+      const title= e.kind==='work'?'Подработка':(e.kind==='offHours'?'Отгул':'Отпуск');
+      const hrs  = e.kind==='vacation'?'—':Number(e.hours||0).toFixed(2);
+      return `<div class="rowline">
+        <div><span class="pill">${icon}</span> ${title}</div>
+        <div class="hours">${hrs}</div>
+        <div class="actions"><button class="btn danger" data-del-id="${e.id}">Удалить</button></div>
+      </div>`;
+    }).join('');
+  }
+  box.innerHTML=html;
+  bindDeleteButtons();
+
+  const t=calcTotals(dateISO);
+  document.getElementById('totals').innerHTML = `
+    <span class="pill">База: ${t.base.toLocaleString('ru-RU')} ₽</span>
+    <span class="pill">Почасовая: ${t.rate.toFixed(0)} ₽/ч</span>
+    <span class="pill">Подработки: ${t.payWork.toLocaleString('ru-RU')} ₽ (часы: ${t.workH.toFixed(2)})</span>
+    <span class="pill">Отгул: ${t.offH.toFixed(2)} ч</span>
+    <span class="pill">Отпуск: ${t.payVac.toLocaleString('ru-RU')} ₽ (дн.: ${t.vacPaidDays})</span>
+    <span class="pill" style="font-weight:700">Итого: ${t.total.toLocaleString('ru-RU')} ₽</span>
+  `;
+}
+
+/* HOLIDAYS */
+let hYear=state.year, hMonth=state.month;
+function renderHolidaysCalendar(y,m){
+  const t = document.getElementById('h-title');
+const d = new Date(y,m,1);
+const month = d.toLocaleDateString('ru-RU',{month:'long'});
+const year  = d.getFullYear();
+t.innerHTML = `${month}<span class="year">${year} г.</span>`;
+
+  document.getElementById('h-dow').innerHTML =
+    ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(d=>`<span>${d}</span>`).join('');
+  const grid=document.getElementById('h-grid'); grid.innerHTML='';
+  const first=new Date(y,m,1);
+  const startCol=(first.getDay()+6)%7, n=daysInMonth(y,m);
+  const key = ymStr(y,m);
+  const arr = (state.holidays[key] || []).slice();
+
+  for(let i=0;i<startCol;i++){ const d=document.createElement('div'); d.className='cal-day'; d.style.visibility='hidden'; grid.appendChild(d); }
+  for(let day=1; day<=n; day++){
+    const btn=document.createElement('button'); btn.className='cal-day';
+    const isHol=arr.includes(day);
+    btn.innerHTML=`<span class="num">${day}</span><div class="badge">${isHol?'🎉':''}</div>`;
+    btn.onclick = () => {
+  const list = state.holidays[key] || [];
+  const i = list.indexOf(day);
+  if (i > -1) list.splice(i, 1); else list.push(day);
+  state.holidays[key] = list.sort((a,b)=>a-b);
+  saveHolidays(state.holidays);
+
+  // Перерисовали сетку праздников
+  renderHolidaysCalendar(y, m);
+
+  // 1) ВСЕГДА обновляем "Рабочих дней в текущем месяце"
+  //    (текущий месяц = тот, что открыт в журнале)
+  updateWorkdaysForCurrentMonth();
+
+  // 2) Если правим именно тот месяц, который сейчас открыт в журнале —
+  //    перерисуем календарь и итоги за выбранный день,
+  //    чтобы ставка/итоги пересчитались сразу.
+  if (y === state.year && m === state.month) {
+    renderCalendar(state.year, state.month);
+    renderDayDetails(state.selectedDate);
+  }
+};
+    grid.appendChild(btn);
+  }
+}
+document.getElementById('hPrev').onclick=()=>{ hMonth--; if(hMonth<0){hMonth=11;hYear--} renderHolidaysCalendar(hYear,hMonth) }
+document.getElementById('hNext').onclick=()=>{ hMonth++; if(hMonth>11){hMonth=0;hYear++} renderHolidaysCalendar(hYear,hMonth) }
+
+/* IMPORT / EXPORT */
+document.getElementById('btnExport').onclick=()=>{
+  const payload = { entries: loadEntries(), holidays: loadHolidays(), settings };
+  const blob = new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='paycalc_data.json'; a.click();
+  URL.revokeObjectURL(a.href);
+};
+document.getElementById('btnImport').onclick=()=>{
+  const f=document.getElementById('file').files?.[0];
+  if(!f) return alert('Выберите файл JSON');
+  const r=new FileReader();
+  r.onload=()=>{
     try{
-      const data=JSON.parse(await f.text());
-      Object.assign(state,{
-        theme:data.theme||state.theme,
-        month:data.month||state.month,
-        settings:Object.assign({},state.settings,data.settings||{}),
-        holidaysByMonth:data.holidaysByMonth||{},
-        statusesByMonth:data.statusesByMonth||{},
-        shifts:Array.isArray(data.shifts)?data.shifts:state.shifts
-      });
-      document.documentElement.setAttribute('data-theme', state.theme);
-      ui.themeSelect.value=state.theme;
-      ui.monthFilter.value=state.month;
-      Object.entries(state.settings).forEach(([k,v])=>{ if(ui[k]) ui[k].value=v; });
-      if(!state.settings.leaveMode){ state.settings.leaveMode='calendar'; }
-      const lmEl=document.getElementById('leaveMode'); if(lmEl){ lmEl.value=state.settings.leaveMode; }
-      ui.autoWorkdays.value = computeWorkdays(state.month);
-      save(); renderAll();
-    }catch(err){ alert('Ошибка импорта: '+err.message); }
-    ui.importFile.value='';
+      const data=JSON.parse(r.result);
+      if(Array.isArray(data.entries)) saveEntries(data.entries); else saveEntries([]);
+      if(data.holidays && typeof data.holidays==='object') saveHolidays(data.holidays);
+      if(data.settings && typeof data.settings==='object'){
+        Object.assign(settings, defaultSettings, data.settings); saveSettingsObj(settings);
+      }
+      alert('Импорт выполнен');
+      renderCalendar(state.year,state.month); renderDayDetails(state.selectedDate);
+      updateWorkdaysForCurrentMonth();
+    }catch(e){ alert('Ошибка импорта: '+e.message) }
+  };
+  r.readAsText(f);
+};
+
+      // Показываем имя выбранного файла в UI
+const fileInput  = document.getElementById('file');
+const fileNameEl = document.getElementById('fileName');
+if (fileInput && fileNameEl){
+  fileInput.addEventListener('change', () => {
+    fileNameEl.textContent = fileInput.files?.[0]?.name || 'файл не выбран';
   });
-  ui.clearAll.addEventListener('click', ()=>{ if(confirm('Точно удалить все данные?')){ localStorage.removeItem(SKEY); location.reload(); } });
+}
+      
+/* INIT */
+function renderHolidaysCalendarInit(){ renderHolidaysCalendar(hYear,hMonth); }
+setTodayUi();
+renderCalendar(state.year,state.month);
+renderDayDetails(state.selectedDate);
+renderHolidaysCalendarInit();
+updateWorkdaysForCurrentMonth();
 
-  if('serviceWorker' in navigator){
-    navigator.serviceWorker.addEventListener('controllerchange', ()=>location.reload());
-    ui.updateBtn.addEventListener('click', async ()=>{
-      ui.updateStatus.textContent='Проверяем обновления...';
-      try{
-        const reg = await navigator.serviceWorker.getRegistration();
-        if(!reg){ ui.updateStatus.textContent='Сервис-воркер не найден'; return; }
-        await reg.update();
-        if(reg.waiting){ ui.updateStatus.textContent='Найдена новая версия, применяем...'; reg.waiting.postMessage({action:'skipWaiting'}); }
-        else if(reg.installing){ ui.updateStatus.textContent='Устанавливаем обновление...'; reg.installing.addEventListener('statechange',e=>{ if(e.target.state==='installed' && reg.waiting) reg.waiting.postMessage({action:'skipWaiting'}); }); }
-        else { ui.updateStatus.textContent='Новых обновлений нет'; }
-      }catch(err){ ui.updateStatus.textContent='Ошибка: '+err; }
+      /* ===== ARCHIVE: UI ===== */
+const modal = document.getElementById('archiveModal');
+const archMonthSel = document.getElementById('archMonth');
+const archYearInp  = document.getElementById('archYear');
+const archShowBtn  = document.getElementById('archShow');
+const archResult   = document.getElementById('archResult');
+
+function openArchive(){
+  if(archMonthSel && archMonthSel.options.length === 0){
+    const months = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+    months.forEach((name,i)=>{
+      const opt=document.createElement('option');
+      opt.value = i; opt.textContent = name; archMonthSel.appendChild(opt);
     });
-    window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw.js?v=autoavg'); });
+  }
+  archMonthSel.value = String(state.month);
+  archYearInp.value  = String(state.year);
+
+  modal.hidden = false;
+  document.body.classList.add('no-scroll');   // ← блокируем прокрутку фона
+  // по желанию: сразу показать расчёт
+  // renderArchive();
+        archMonthSel?.focus();
+}
+
+function closeArchive(){
+  modal.hidden = true;
+  document.body.classList.remove('no-scroll'); // ← возвращаем прокрутку фона
+}
+function renderArchive(){
+  const y = Number(archYearInp.value||state.year);
+  const m = Number(archMonthSel.value||state.month);
+
+  const t = totalsForMonth(y,m);
+  const items = monthEntriesList(y,m);
+
+  const head = new Date(y,m,1).toLocaleDateString('ru-RU',{month:'long', year:'numeric'});
+  let html = `<h3 style="margin:10px 0 6px">${head}</h3>`;
+
+  html += `
+    <div class="archive-totals">
+      <span class="pill">База: ${t.base.toLocaleString('ru-RU')} ₽</span>
+      <span class="pill">Почасовая: ${t.rate.toFixed(0)} ₽/ч</span>
+      <span class="pill">Подработки: ${t.payWork.toLocaleString('ru-RU')} ₽ (часы: ${t.workH.toFixed(2)})</span>
+      <span class="pill">Отгул: ${t.offH.toFixed(2)} ч</span>
+      <span class="pill">Отпуск: ${t.payVac.toLocaleString('ru-RU')} ₽ (дн.: ${t.vacPaidDays})</span>
+      <span class="pill" style="font-weight:700">Итого: ${t.total.toLocaleString('ru-RU')} ₽</span>
+    </div>
+  `;
+
+  if(items.length){
+    html += `<div class="archive-list">` +
+      items.map(it=>`
+        <div class="archive-item">
+          <div>${it.label}</div>
+          <div class="r">${it.text}</div>
+        </div>
+      `).join('') +
+    `</div>`;
+  }else{
+    html += `<div class="mut" style="margin-top:10px">Записей за выбранный месяц нет.</div>`;
   }
 
-  function onAddShift(){
-    const date=ui.shiftDate.value||todayISO();
-    const hours=parseFloat(ui.shiftHours.value);
-    if(!hours||hours<=0){ alert('Укажите часы (>0)'); return; }
-    const type=autoType(date);
-    const st=getStatuses(isoMonth(date)); st.off=st.off.filter(x=>x!==date); st.vac=st.vac.filter(x=>x!==date);
-    state.shifts.push({id:cryptoRandom(), date, type, hours});
-    ui.shiftHours.value=''; save(); renderAll();
-  }
+  archResult.innerHTML = html;
+}
 
-  function onMonthChanged(){
-    ui.monthFilter.value = state.month;
-    ui.autoWorkdays.value = computeWorkdays(state.month);
-    save(); renderAll();
-  }
-
-  function renderAll(){
-    ui.autoWorkdays.value = computeWorkdays(state.month);
-    renderCalendar();
-    renderList();
-    renderTotals();
-    buildHolidayGrid(state.month);
-  }
-
-  function renderTotals(){
-    const ym=state.month;
-    const t = monthlyTotals(ym);
-
-    ui.baseMonthlyOut.textContent = (state.settings.baseMonthly||0)>0 ? money(t.baseEff)+' ₽' : 'не задан';
-    ui.hourlyOut.textContent = hourly(ym)>0 ? money(hourly(ym)) : '—';
-    ui.overtimeOut.textContent = money(t.overtime)+' ₽';
-    ui.otHoursOut.textContent = t.otHours.toFixed(2);
-    ui.grandTotal.textContent = money(t.sum)+' ₽';
-    ui.vacInfo.textContent = t.vacPay>0 ? `Отпуск: ${money(t.vacPay)} ₽ (дней: ${monthlyPartsRaw(ym).vacDays}, ср. дневн.: ${money(averageDaily(ym))})` : '';
-  }
-
-  function typeName(t){
-    return t==='weekday'?'Будни (сверхур.)':
-           t==='saturday'?'Суббота':
-           t==='sunday'?'Воскресенье':
-           t==='holiday'?'Праздник':
-           t==='dayoff'?'Отгул':'—';
-  }
-
-  function renderList(){
-    const ym=state.month; const hr=hourly(ym);
-    const data=state.shifts.filter(s=>isoMonth(s.date)===ym).sort((a,b)=>a.date.localeCompare(b.date));
-    const tb=ui.rows; tb.innerHTML=''; let total=0;
-    data.forEach(s=>{
-      const pay=payForShift(s,hr); total+=pay;
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td>${s.date}</td><td>${dayShort(s.date)}</td><td>${typeName(s.type)}</td>
-        <td class="right">${s.hours.toFixed(2)}</td><td class="right">${hr>0?money(hr):'—'}</td><td class="right">${money(pay)}</td>
-        <td class="right"><button class="btn small" data-edit="${s.id}" type="button">Ред.</button>
-        <button class="btn small danger" data-del="${s.id}" type="button">Удал.</button></td>`;
-      tb.appendChild(tr);
-    });
-    ui.totalOvertime.textContent = money(total);
-
-    tb.onclick = (e)=>{
-      const b=e.target.closest('button'); if(!b) return;
-      const id=b.dataset.edit||b.dataset.del;
-      const s=state.shifts.find(x=>x.id===id); if(!s) return;
-      if(b.dataset.edit!==undefined){
-        const nh=parseFloat(prompt('Новые часы:', s.hours)); if(!nh||nh<=0) return;
-        let nt=prompt('Тип (weekday/saturday/sunday/holiday/dayoff):', s.type) || s.type;
-        const allowed=new Set(['weekday','saturday','sunday','holiday','dayoff']);
-        if(!allowed.has(nt)) nt=s.type;
-        s.hours=nh; s.type=nt; save(); renderAll();
-      }else{
-        state.shifts=state.shifts.filter(x=>x.id!==id); save(); renderAll();
-      }
-    };
-  }
-
-  function renderCalendar(){
-    const ym=state.month, [y,m]=ym.split('-').map(Number);
-    document.getElementById('monthTitle').textContent = new Date(y,m-1,1).toLocaleDateString('ru-RU',{month:'long',year:'numeric'});
-    const first=new Date(y,m-1,1), start=(first.getDay()+6)%7, days=new Date(y,m,0).getDate();
-    const grid=document.getElementById('calendarGrid'); grid.innerHTML='';
-    ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(h=>{const d=document.createElement('div');d.className='day-head';d.textContent=h;grid.appendChild(d);});
-    for(let i=0;i<start;i++) grid.appendChild(document.createElement('div'));
-    const today=todayISO();
-    const st=getStatuses(ym);
-    const offSet=new Set(st.off||[]), vacSet=new Set(st.vac||[]);
-    for(let d=1; d<=days; d++){
-      const iso=mkISO(y,m,d);
-      const item=document.createElement('div');
-      const dayShifts=state.shifts.filter(s=>s.date===iso);
-      const isHol = isHoliday(iso);
-      const has = dayShifts.length || offSet.has(iso) || vacSet.has(iso) || isHol;
-      item.className='day'+(has?' has':'')+(iso===today?' today':'');
-      let badge='';
-      if(vacSet.has(iso)) badge='🏖️';
-      else if(offSet.has(iso)) badge='🚫';
-      else if(isHol) badge='🎉';
-      else if(dayShifts.length) badge='🔨';
-      item.innerHTML=`<div class="num">${d}</div>${has?`<div class="badge">${badge}</div>`:''}`;
-      item.addEventListener('click',()=>{
-        ui.shiftDate.value = iso; // синхронизация формы
-        showDayDetail(iso,dayShifts, hourly(isoMonth(iso)));
-      });
-      grid.appendChild(item);
+// кнопки
+document.getElementById('openArchive')?.addEventListener('click', openArchive);
+modal?.addEventListener('click', (e)=>{
+  if(e.target.matches('[data-close]')) closeArchive();
+});
+archShowBtn?.addEventListener('click', renderArchive);
+/* PWA register */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{ navigator.serviceWorker.register('./sw.js').catch(()=>{}); });
+}
+  // Глушим быстрый повторный тап (двойной) — не даём браузеру включить зум
+(function preventDoubleTapZoom(){
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', function (e) {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+      e.preventDefault();   // блокируем "второй" тап
     }
-  }
-
-  function showDayDetail(iso, dayShifts, hr){
-    const box=document.getElementById('dayDetail'); box.innerHTML='';
-    const head=document.createElement('div'); head.style.display='flex'; head.style.justifyContent='space-between'; head.style.alignItems='center';
-    head.innerHTML=`<div class="total">${iso} — ${new Date(iso+'T00:00:00').toLocaleDateString('ru-RU',{weekday:'long'})}</div>`;
-    const bar=document.createElement('div'); bar.className='toolbar';
-    const bVac=document.createElement('button'); bVac.className='btn small'; bVac.textContent='Отпуск';
-    bVac.onclick=()=>{ const st=getStatuses(isoMonth(iso)); const set=new Set(st.vac); if(set.has(iso)) st.vac=st.vac.filter(x=>x!==iso); else { set.add(iso); st.vac=Array.from(set).sort(); } state.shifts=state.shifts.filter(s=>s.date!==iso); save(); renderAll(); };
-    bar.appendChild(bVac); head.appendChild(bar);
-    box.appendChild(head);
-
-    const wrap=document.createElement('div'); wrap.className='table-wrap';
-    wrap.innerHTML=`<table><thead><tr><th>Тип</th><th class="right">Часы</th><th class="right">Оплата</th><th class="right">Действия</th></tr></thead>
-      <tbody>${(dayShifts||[]).map(s=>{
-        return `<tr><td>${typeName(s.type)}</td><td class="right">${s.hours.toFixed(2)}</td><td class="right">${money(payForShift(s,hr))}</td>
-        <td class="right"><button class="btn small" data-edit="${s.id}" type="button">Ред.</button>
-        <button class="btn small danger" data-del="${s.id}" type="button">Удал.</button></td></tr>`;}).join('')}</tbody></table>`;
-    box.appendChild(wrap);
-
-    wrap.onclick = (e)=>{
-      const b=e.target.closest('button'); if(!b) return;
-      const id=b.dataset.edit||b.dataset.del;
-      const s=state.shifts.find(x=>x.id===id); if(!s) return;
-      if(b.dataset.edit!==undefined){
-        const nh=parseFloat(prompt('Новые часы:', s.hours)); if(!nh||nh<=0) return;
-        let nt=prompt('Тип (weekday/saturday/sunday/holiday/dayoff):', s.type) || s.type;
-        const allowed=new Set(['weekday','saturday','sunday','holiday','dayoff']);
-        if(!allowed.has(nt)) nt=s.type;
-        s.hours=nh; s.type=nt; save(); renderAll(); showDayDetail(iso, state.shifts.filter(x=>x.date===iso), hr);
-      }else{
-        state.shifts=state.shifts.filter(x=>x.id!==id); save(); renderAll(); showDayDetail(iso, state.shifts.filter(x=>x.date===iso), hr);
-      }
-    };
-  }
-
-  function buildHolidayGrid(ym){
-    const cont=document.getElementById('holidayGrid'); cont.innerHTML=''; document.getElementById('monthLabel').textContent=ym;
-    const [y,m]=ym.split('-').map(Number); const first=new Date(y,m-1,1), start=(first.getDay()+6)%7, days=new Date(y,m,0).getDate();
-    const set=new Set(state.holidaysByMonth[ym]||[]);
-    const grid=document.createElement('div'); grid.style.display='grid'; grid.style.gridTemplateColumns='repeat(7,1fr)'; grid.style.gap='8px';
-    ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].forEach(h=>{const d=document.createElement('div');d.textContent=h;d.className='muted';grid.appendChild(d);});
-    for(let i=0;i<start;i++) grid.appendChild(document.createElement('div'));
-    for(let d=1; d<=days; d++){
-      const iso=mkISO(y,m,d); const b=document.createElement('button'); b.className='btn small'; b.textContent=d; b.type='button';
-      if(set.has(iso)){ b.style.background='#3a1220'; b.style.borderColor='#5c1b2f'; }
-      b.onclick=()=>{
-        if(set.has(iso)){ set.delete(iso); b.style.background=''; b.style.borderColor=''; }
-        else { set.add(iso); b.style.background='#3a1220'; b.style.borderColor='#5c1b2f'; }
-        state.holidaysByMonth[ym]=Array.from(set).sort(); save();
-        document.getElementById('autoWorkdays').value = computeWorkdays(ym);
-        renderAll();
-      };
-      grid.appendChild(b);
-    }
-    cont.appendChild(grid);
-  }
-
-  function renderArchive(){
-    const list=document.getElementById('archiveList'); list.innerHTML='';
-    const by={}; state.shifts.forEach(s=>{ const m=isoMonth(s.date); (by[m]||(by[m]=[])).push(s); });
-    Object.keys(by).sort().reverse().forEach(m=>{
-      const t = monthlyTotals(m);
-      const card=document.createElement('div'); card.className='card';
-      card.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><div class="total">${m}</div>
-        <div class="muted">часы: ${t.otHours.toFixed(1)} • подработки: ${money(t.overtime)} ₽ • база: ${money(t.baseEff)} ₽ • отпуск: ${money(t.vacPay)} ₽ • итого: ${money(t.sum)} ₽</div></div>`;
-      list.appendChild(card);
-    });
-  }
-
-  renderAll();
+    lastTouchEnd = now;
+  }, { passive: false });
 })();
 </script>
 </body>
