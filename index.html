@@ -436,6 +436,45 @@ function updateWorkdaysForCurrentMonth(){
   const el=document.getElementById('workdays'); if(el) el.value = wd;
 }
 
+      // === КОЭФФИЦИЕНТЫ ДЛЯ ПОДРАБОТОК ===
+const COEFF = {
+  weekdayFirst: 1.5, // первые 2 часа в будни
+  weekdayNext:  2.0, // оставшиеся часы в будни
+  saturday:     1.5,
+  sunday:       2.0,
+  holiday:      2.0
+};
+
+// Проверка: является ли дата праздничной (по вкладке "Праздники")
+function isHolidayISO(dateISO){
+  const y = Number(dateISO.slice(0,4));
+  const m = Number(dateISO.slice(5,7)) - 1;
+  const d = Number(dateISO.slice(8,10));
+  const hol = state.holidays[ymStr(y,m)] || [];
+  return hol.includes(d);
+}
+
+// Тип дня по ISO-дате
+function dayTypeByISO(dateISO){
+  if (isHolidayISO(dateISO)) return 'holiday';      // праздник имеет приоритет
+  const dow = new Date(dateISO).getDay();           // 0=Вс..6=Сб
+  if (dow === 0) return 'sunday';
+  if (dow === 6) return 'saturday';
+  return 'weekday';
+}
+
+// Оплата за ОДНУ запись подработки с учётом коэффициентов
+function payForWorkEntry(entry, baseRate){
+  const h = Number(entry.hours||0);
+  const t = dayTypeByISO(entry.date);
+  if (t === 'holiday')  return h * COEFF.holiday  * baseRate;
+  if (t === 'sunday')   return h * COEFF.sunday   * baseRate;
+  if (t === 'saturday') return h * COEFF.saturday * baseRate;
+  // weekday: первые 2 часа ×1.5, дальше ×2
+  const first = Math.min(h, 2) * COEFF.weekdayFirst * baseRate;
+  const next  = Math.max(0, h - 2) * COEFF.weekdayNext  * baseRate;
+  return first + next;
+}
 /* ================== TABS ================== */
 const tabBtns=[...document.querySelectorAll('.tab')];
 const tabPages=[...document.querySelectorAll('.tabpage')];
@@ -645,7 +684,9 @@ function totalsForMonth(y,m){
   const vacPaidDays = vacDays.filter(d => !hol.includes(d)).length;
   const vacWeekdays = vacDays.filter(d => isWeekday(y,m,d)).length;
 
-  const payWork = workH * rate;
+  const payWork = list
+  .filter(e => e.kind === 'work')
+  .reduce((sum, e) => sum + payForWorkEntry(e, rate), 0);
   const payVac  = avgDailyFor(y,m) * vacPaidDays;
   const base    = Math.max(0, Number(settings.salary||0) - offH*rate - vacWeekdays*dayFromSalary);
   const total   = base + payWork + payVac;
@@ -683,12 +724,12 @@ function currentHourRate(){
 }
 function monthAccruals(y,m){
   const ym = ymStr(y,m);
-  const list = loadEntries().filter(e=>e.date.slice(0,7)===ym);
-  const rate = currentHourRate();
-  let workH = 0;
-  list.forEach(e=>{ if(e.kind==='work') workH += Number(e.hours||0); });
-  const overtimePay = workH * rate;
-  return Number(settings.salary||0) + overtimePay;
+  const list = loadEntries().filter(e => e.date.slice(0,7) === ym);
+const rate = currentHourRate();
+const overtimePay = list
+  .filter(e => e.kind === 'work')
+  .reduce((sum, e) => sum + payForWorkEntry(e, rate), 0);
+return Number(settings.salary||0) + overtimePay;
 }
 function autoAverageDaily(){
   const anchor = new Date(state.year, state.month, 1);
@@ -726,7 +767,9 @@ function calcTotals(dateISO){
   const vacPaidDays = vacDays.filter(d => !hol.includes(d)).length;
   const vacWeekdays = vacDays.filter(d => isWeekday(y,m,d)).length;
 
-  const payWork = workH * rate;
+  const payWork = list
+  .filter(e => e.kind === 'work')
+  .reduce((sum, e) => sum + payForWorkEntry(e, rate), 0);
   const payVac  = avgDaily() * vacPaidDays;
 
   const base = Math.max(0, Number(settings.salary||0) - offH*rate - vacWeekdays*dayFromSalary);
